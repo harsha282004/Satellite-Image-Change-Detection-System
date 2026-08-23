@@ -5,6 +5,95 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 10 — Streamlit Dashboard
+
+**Date:** 2026-08-23
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/visualization/overlays.py`: `create_overlay()` — factored out once a third real consumer
+  needed the same before/after/mask compositing logic (`src/evaluation/evaluate.py` and
+  `scripts/analyze_predictions.py` had inline versions; the dashboard is the third). 4 new tests.
+- `dashboard/app.py`: full Streamlit dashboard built directly on the Phase 9 `Predictor`/
+  `src/analysis` pipeline — no new inference or analysis logic, only UI wiring around what was
+  already implemented and tested. Model selector (all 5 trained models from Phase 4/5/8), a
+  decision-threshold slider, a min-region-size input, real benchmark metrics loaded from
+  `outputs/metrics/*_test_metrics.json` for whichever model is selected, before/after image
+  upload, real model inference on click, predicted-mask/overlay display, region-count/percent-
+  changed/area/largest-region stat tiles, and a full per-region data table. A prominent, explicit
+  capability note states what the model does and does not do (binary building-change only, no
+  type classification, area assumption not verified for arbitrary uploads) — matching Rule 4.
+  Invalid uploaded files are caught and shown as a clear error message, not a stack trace or crash
+  (a real, expected user-input boundary case, not speculative error handling — Rule on validating
+  at system boundaries).
+- **Actually launched and drove the app in a real browser**, per the UI-verification requirement:
+  installed Playwright + Chromium (no project-specific run skill existed yet for this repo, and
+  `chromium-cli` was not available in this environment, so used Playwright directly per the `run`
+  skill's documented fallback), started the Streamlit server, and drove it through: initial page
+  load (no console errors), model-selector dropdown interaction with real per-model metrics
+  updating correctly, uploading real LEVIR-CD test images
+  (`data/raw/levir_cd/test/{A,B}/test_29.png`), clicking "Detect Changes" and confirming real
+  inference ran, the region-table expander, and the invalid-file error path.
+
+**FILES CREATED:**
+- `src/visualization/overlays.py`
+- `dashboard/app.py`
+- `tests/test_overlays.py`
+
+**FILES MODIFIED:**
+- `README.md` (Dashboard section)
+
+**COMMANDS EXECUTED:**
+- `pytest tests/ -q` (60 -> 64 tests)
+- `npx playwright install chromium` (in a scratchpad npm project, not the repo)
+- `venv/Scripts/python.exe -m streamlit run dashboard/app.py --server.headless true --server.port 8501` (background)
+- `curl` poll until the server was actually serving (not a blind sleep)
+- 5 Playwright driver scripts (Node.js): initial load + screenshot, upload+inference+screenshot,
+  region-table-expander+screenshot, model-switcher+screenshot, invalid-file+screenshot
+- `taskkill //PID <streamlit pid> //F` to stop the server after verification
+
+**TESTS:**
+- `pytest tests/`: 64/64 passed (60 from Phase 9 + 4 new overlay tests).
+- **Real browser verification (not just import-and-typecheck):**
+  - Initial load: page renders, sidebar shows real IoU=0.6560 for the default-selected best model
+    (Phase 8's Siamese+Attention) — matches `docs/EXPERIMENTS.md` exactly. Zero console/page errors.
+  - Upload + inference: uploaded the real `test_29.png` before/after pair, clicked "Detect
+    Changes", got a real predicted mask/overlay and stats — **54 regions, 14.97% changed, 3.9240 ha
+    total changed area, 4932 m² largest region** — which is an *exact* match to
+    `scripts/analyze_predictions.py`'s independently-run output for the same image in Phase 9,
+    confirming the dashboard calls the same real pipeline rather than a separate/faked path.
+  - Region table expander: renders a real per-region table (pixel_count, area_m2, centroid) for
+    all 54 regions.
+  - Model switcher: selecting "Baseline U-Net (Phase 4)" updated the sidebar to that model's real
+    metrics (IoU=0.6234, Dice=0.7680, Precision=0.7333, Recall=0.8062) — matches
+    `DEVELOPMENT_LOG.md` Phase 6's restored-baseline numbers exactly.
+  - Invalid file: uploading a non-image file produced the clear error "Could not read 'fake.png'
+    — not a valid image file." — no crash, no stack trace shown to the user.
+
+**RESULTS:**
+No new model training or metrics this phase — the dashboard surfaces exactly the real numbers
+already measured in Phases 4-9, confirmed identical via the browser test above.
+
+**KNOWN ISSUES:**
+- No project-specific "how to run this app" skill existed before this phase; per the `run` skill's
+  own guidance, this is worth capturing (`/run-skill-generator`) for faster verification in future
+  phases (e.g. Phase 11's real-world demonstration will likely reuse this same dashboard).
+- The dashboard's area-assumption caveat (LEVIR-CD's 0.5 m/pixel resolution) is stated in the UI
+  but not enforced or checked against uploaded images — a user uploading an arbitrarily-scaled
+  image gets area numbers computed under a documented-but-unverified assumption. This is
+  intentional (documented, not silently assumed) but is a real limitation, not a false claim.
+- `dashboard/components/` and `dashboard/utils/` (scaffolded in Phase 0) remain unused — `app.py`
+  was not yet complex enough to justify splitting it, per Rule 5 (no premature abstraction).
+
+**NEXT PHASE:**
+- PHASE 11 — Real-World Satellite Demonstration: investigate Sentinel-2 as a real-world imagery
+  source, explicitly distinguish this from the LEVIR-CD benchmark evaluation (different sensor/
+  resolution/domain), and document rather than force a demonstration if Sentinel-2 imagery proves
+  unsuitable for the trained model.
+
+---
+
 ## PHASE 9 — Change Region Analysis & Quantification
 
 **Date:** 2026-08-23

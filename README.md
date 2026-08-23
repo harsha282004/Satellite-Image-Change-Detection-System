@@ -145,7 +145,20 @@ about) correctly yielded only 3 tiny regions covering 0.05% of the tile.
 
 ## Dashboard
 
-`NOT YET IMPLEMENTED` — Phase 10 (`dashboard/app.py`).
+**Implemented (Phase 10).**
+
+```bash
+python -m streamlit run dashboard/app.py
+```
+
+Upload a before/after image pair, select any of the 5 trained models (sidebar shows that model's
+real, measured benchmark metrics — not simulated), and click "Detect Changes" to run real
+inference: predicted mask, overlay, region count, percent/area changed, and a full per-region
+table. Verified end-to-end in a real browser (Playwright): model switching, image upload, live
+inference producing results matching `scripts/analyze_predictions.py`'s output exactly for the
+same test image, and graceful error handling for an invalid uploaded file. The "Capabilities"
+table on the page states plainly what is and isn't implemented (e.g. no change-type
+classification, no verified real-world-imagery support) — nothing is faked or implied.
 
 ## Results
 
