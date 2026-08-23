@@ -107,8 +107,9 @@ IoU)/`last.pt` checkpoints to `outputs/checkpoints/<experiment_name>/`.
 
 ## Evaluation
 
-Implemented (Phase 4) for the baseline; the full rigorous Phase 7 evaluation (final-model
-comparison, training curves, `docs/EVALUATION.md`) is `NOT YET IMPLEMENTED`.
+**Implemented (Phase 4-7).** Full rigorous writeup — methodology, class-imbalance-aware metric
+rationale, quantitative baseline-vs-Siamese comparison, qualitative results, training curves, and
+explicitly stated evaluation limitations — in [`docs/EVALUATION.md`](docs/EVALUATION.md).
 
 ```bash
 python -m src.evaluation.evaluate --config configs/baseline.yaml \

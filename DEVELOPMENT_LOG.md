@@ -5,6 +5,71 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 7 — Evaluation & Visualization
+
+**Date:** 2026-08-23
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- Most of the underlying evaluation work this phase covers (test-set IoU/Dice/Precision/Recall/
+  F1/Accuracy, qualitative before/after/GT/prediction/overlay/diff grids, training curves) was
+  already implemented and actually run in Phases 4-6. Phase 7's concrete new work is consolidating
+  it into a single rigorous, honest writeup:
+- `docs/EVALUATION.md`: full evaluation methodology (test-set/leakage guarantees, class-imbalance
+  rationale for why accuracy alone is insufficient, confusion-matrix-accumulation metric
+  methodology, checkpoint-selection protocol, the Phase 6 reproducibility caveat), the real
+  quantitative comparison table (restated from the corrected Phase 6 numbers) plus raw TP/FP/FN/TN
+  counts, an interpretation section explaining the precision/recall tradeoff in terms of the actual
+  false-positive/false-negative pixel counts, qualitative-results discussion, training-curve
+  discussion (noting validation-curve noise from the small 64-image val set), and an explicit
+  "Limitations of this evaluation" section (single seed, untuned hyperparameters, benchmark-only,
+  fixed 0.5 threshold, only one Siamese comparison mode trained) plus a status-summary table
+  distinguishing Implemented/Measured from Planned items.
+- `README.md` Evaluation section updated to point to the new doc.
+
+**FILES CREATED:**
+- `docs/EVALUATION.md`
+
+**FILES MODIFIED:**
+- `README.md` (Evaluation section)
+
+**COMMANDS EXECUTED:**
+- Re-inspected `outputs/metrics/{baseline_unet,siamese_unet_diff_concat}_test_metrics.json` to
+  confirm the numbers written into `docs/EVALUATION.md` exactly match the saved machine-readable
+  reports (no transcription drift).
+- Visually re-inspected `outputs/visualizations/baseline_unet_test_predictions.png` (regenerated
+  post-Phase-6-restore) to confirm the qualitative discussion in `docs/EVALUATION.md` (more
+  false-positive speckling than the Siamese grid) is accurate to the actual current image, not the
+  pre-restore one.
+- `pytest tests/ -q` — confirm no regression (no code changed this phase, documentation only).
+
+**TESTS:**
+- `pytest tests/`: 40/40 passed (unchanged from Phase 6 — this phase touched no source code).
+- Cross-checked every number quoted in `docs/EVALUATION.md`'s quantitative table and confusion-
+  matrix table character-for-character against the JSON metric files, per Rule 3 (never fabricate
+  — and never let a transcription typo silently become a fabrication either).
+
+**RESULTS:**
+No new model training or metrics computation this phase — `docs/EVALUATION.md` is a rigorous
+writeup of results already measured and recorded in the Phase 4/5/6 entries above. See those
+entries (or `docs/EVALUATION.md` directly) for the real numbers.
+
+**KNOWN ISSUES:**
+- Carried forward from `docs/EVALUATION.md`'s own limitations section: single run/seed per model,
+  untuned hyperparameters, benchmark-only (no real-world evaluation yet — Phase 11), fixed 0.5
+  decision threshold (no PR-curve/operating-point sweep), only `diff_concat` Siamese mode
+  evaluated (Phase 8 ablation deferred).
+
+**NEXT PHASE:**
+- PHASE 8 — Model Improvement & Research Experiments: only implement additional experiments
+  (attention variant, Transformer variant, the untrained `diff`/`concat` Siamese comparison modes,
+  hyperparameter tuning) where technically justified by hardware/time/dataset-size constraints and
+  expected measurable value — not automatically, per `DEVELOPMENT_RULES.md` Rule 5. Record an
+  honest experiment comparison table with real results for whatever is actually run.
+
+---
+
 ## PHASE 6 — Training & Experiment Pipeline
 
 **Date:** 2026-08-23
