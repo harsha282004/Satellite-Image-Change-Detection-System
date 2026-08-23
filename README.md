@@ -93,10 +93,11 @@ The `requirements.txt` install alone pulls the CPU build of PyTorch; see the not
 
 ## Training
 
-Baseline U-Net: **Implemented (Phase 4).** Siamese U-Net: `NOT YET IMPLEMENTED` — Phase 5.
+Baseline U-Net (Phase 4) and Siamese U-Net (Phase 5, primary architecture): **both implemented.**
 
 ```bash
-python -m src.training.train --config configs/baseline.yaml
+python -m src.training.train --config configs/baseline.yaml   # baseline
+python -m src.training.train --config configs/siamese.yaml    # Siamese (primary)
 ```
 
 Trains for the epoch count in the config (`--epochs N` overrides it), logging per-epoch
@@ -128,26 +129,30 @@ a qualitative prediction grid (before/after/ground-truth/prediction/overlay/diff
 
 ## Results
 
-**Baseline U-Net (Phase 4), real measured test-set results** (128 held-out LEVIR-CD test samples,
-never used in training or checkpoint selection):
+Real measured test-set results (128 held-out LEVIR-CD test samples, never used in training or
+checkpoint selection), same data split, training budget (30 epochs), and checkpoint-selection
+rule (best validation IoU) for both models:
 
-| Metric | Value |
-|--------|-------|
-| IoU | 0.6250 |
-| Dice | 0.7692 |
-| Precision | 0.7681 |
-| Recall | 0.7703 |
-| F1 | 0.7692 |
-| Accuracy | 0.9765 |
+| Metric | Baseline U-Net (Phase 4) | Siamese U-Net (Phase 5, primary architecture) |
+|--------|-------|-------|
+| IoU | 0.6250 | **0.6442** |
+| Dice | 0.7692 | **0.7836** |
+| Precision | 0.7681 | **0.7982** |
+| Recall | 0.7703 | 0.7695 |
+| F1 | 0.7692 | **0.7836** |
+| Accuracy | 0.9765 | **0.9784** |
 
-Training: 30 epochs, Adam (lr=1e-4), BCE+Dice loss, batch size 8, image size 256, single NVIDIA
-RTX 4050 Laptop GPU, ~50s/epoch (~25 min total). Full details, training curve numbers, and
-known-issue notes (training had not fully converged within the 30-epoch budget) in
-`DEVELOPMENT_LOG.md` (Phase 4 entry) and `outputs/metrics/baseline_unet_test_metrics.json`.
+The Siamese U-Net (shared encoder, `diff_concat` feature comparison, 14.7M parameters) measurably
+outperforms the simple channel-concatenation baseline (7.8M parameters) on every metric except
+recall, where they're statistically indistinguishable. Both trained 30 epochs, Adam (lr=1e-4),
+BCE+Dice loss, batch size 8, image size 256, single NVIDIA RTX 4050 Laptop GPU (~25 min each).
+Full details, training curves, and known-issue notes (neither model was trained to full
+convergence within the fixed 30-epoch budget — this was a controlled comparison, not a
+hyperparameter-tuned final result) in `DEVELOPMENT_LOG.md` (Phase 4 and Phase 5 entries) and
+`outputs/metrics/{baseline_unet,siamese_unet_diff_concat}_test_metrics.json`.
 
-This is the simple channel-concatenation baseline, not the project's primary Siamese U-Net
-contribution (`NOT YET MEASURED` — Phase 5). A full comparison table across all implemented models
-will be added in Phase 7/8.
+A broader, tuned multi-experiment comparison (including the untrained `diff`/`concat` comparison
+modes and any attention/Transformer variants, if justified) is Phase 8 — `NOT YET MEASURED`.
 
 ## Experiments
 

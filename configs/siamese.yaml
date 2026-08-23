@@ -1,0 +1,25 @@
+# Phase 5 primary architecture: Siamese U-Net with a shared encoder and explicit before/after
+# feature comparison at every scale (see models/siamese_unet.py, docs/ARCHITECTURE.md).
+extends: config.yaml
+
+experiment_name: siamese_unet_diff_concat
+
+model:
+  type: siamese_unet
+  base_channels: 32
+  comparison_mode: diff_concat  # one of: diff, concat, diff_concat (all implemented, see tests/test_siamese_unet.py)
+
+dataset:
+  root: data/raw/levir_cd
+  image_size: 256
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+
+training:
+  epochs: 30
+  learning_rate: 0.0001
+  optimizer: adam
+  loss: bce_dice
+  seed: 42

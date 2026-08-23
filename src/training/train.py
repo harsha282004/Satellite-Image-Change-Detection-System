@@ -11,14 +11,10 @@ import torch
 import yaml
 
 from models.losses import get_loss
+from models.siamese_unet import SiameseUNet
 from models.unet import BaselineChangeUNet
 from src.data.dataloader import get_dataloader
 from src.training.trainer import Trainer
-
-try:
-    from models.siamese_unet import SiameseUNet
-except ImportError:
-    SiameseUNet = None  # not implemented until Phase 5
 
 
 def load_config(path: str) -> dict:
@@ -58,8 +54,6 @@ def build_model(config: dict) -> torch.nn.Module:
     if model_type == "baseline_unet":
         return BaselineChangeUNet(base_channels=config["model"].get("base_channels", 32))
     if model_type == "siamese_unet":
-        if SiameseUNet is None:
-            raise NotImplementedError("SiameseUNet is implemented in Phase 5 (models/siamese_unet.py)")
         return SiameseUNet(**{k: v for k, v in config["model"].items() if k != "type"})
     raise ValueError(f"Unknown model type: {model_type!r}")
 

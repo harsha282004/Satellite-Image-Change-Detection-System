@@ -5,6 +5,137 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 5 — Siamese U-Net
+
+**Date:** 2026-08-23
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `models/siamese_encoder.py`: `SiameseEncoder`, structurally identical to the baseline U-Net's
+  encoder (reuses `DoubleConv`/`Down` from `models/unet.py`, Rule 6). Weight sharing between the
+  before/after branches is achieved by construction — a single `SiameseEncoder` instance is called
+  twice in `SiameseUNet.forward` (once per image), so both passes use literally the same
+  parameters, not just the same architecture.
+- `models/siamese_unet.py`: `SiameseUNet` — runs the shared encoder on before/after separately,
+  explicitly compares the resulting feature maps at every scale (bottleneck + 4 skip levels) via
+  `compare_features()`, and decodes with the same reused `Up` block class from `models/unet.py`.
+  Three configurable comparison modes implemented per `PROJECT_CONTEXT.md`: `diff` (absolute
+  difference), `concat` (channel concat), `diff_concat` (both). `comparison_channels()` derives
+  the correct decoder skip-channel counts for whichever mode is selected.
+- `configs/siamese.yaml`: primary trained configuration, `comparison_mode: diff_concat` (chosen
+  after benchmarking all 3 modes for parameter count / VRAM / speed — see Results below — since
+  all three fit comfortably and `diff_concat` carries the richest signal).
+- `docs/ARCHITECTURE.md` updated: Siamese section rewritten from "planned" to describe the actual
+  implementation, with real measured parameter counts and VRAM numbers per comparison mode.
+- 13 new pytest tests (`tests/test_siamese_unet.py`): shared-encoder determinism, comparison-mode
+  channel-count correctness, `diff` symmetry vs. `concat`/`diff_concat` asymmetry (the model can
+  actually tell before from after when the mode preserves order), forward-pass output shape and
+  backward+optimizer-step parameter-change checks for all 3 comparison modes, invalid-mode error
+  handling, and a check that encoder parameters appear exactly once (genuinely shared, not
+  duplicated per branch).
+- `src/training/train.py` cleaned up: removed the Phase-4-era `try/except` placeholder import for
+  `SiameseUNet` now that it's implemented, wired directly.
+
+**FILES CREATED:**
+- `models/siamese_encoder.py`, `models/siamese_unet.py`
+- `configs/siamese.yaml`
+- `tests/test_siamese_unet.py`
+- `outputs/checkpoints/siamese_unet_diff_concat/{best,last}.pt` (gitignored)
+- `outputs/experiments/siamese_unet_diff_concat/{history.csv,history.json}` (gitignored)
+- `outputs/metrics/siamese_unet_diff_concat_test_metrics.json` (gitignored)
+- `outputs/visualizations/siamese_unet_diff_concat_test_predictions.png` (gitignored)
+
+**FILES MODIFIED:**
+- `src/training/train.py` (direct `SiameseUNet` import/wiring, placeholder removed)
+- `docs/ARCHITECTURE.md` (Siamese section rewritten to describe the real implementation)
+
+**COMMANDS EXECUTED:**
+- `pytest tests/test_siamese_unet.py -v` (13 new tests)
+- Benchmark script (inline `python -c`): instantiated `SiameseUNet` for all 3 comparison modes at
+  `base_channels=32`, ran 3 real forward+backward+optimizer-step iterations at batch_size=8,
+  image_size=256 on the GPU, measured parameter count, time/iter, and peak VRAM for each
+- `pytest tests/ -v` (full suite, 40 tests, after adding Siamese tests)
+- `python -m src.training.train --config configs/siamese.yaml --epochs 2` (smoke test)
+- `python -m src.training.train --config configs/siamese.yaml` (real 30-epoch run, GPU, background)
+- `python -m src.evaluation.evaluate --config configs/siamese.yaml --checkpoint outputs/checkpoints/siamese_unet_diff_concat/best.pt`
+
+**TESTS:**
+- `pytest tests/test_siamese_unet.py`: 13/13 passed.
+- `pytest tests/` (full suite): 40/40 passed (27 from Phase 4 + 13 new).
+- Real GPU benchmark (not estimated) of all 3 comparison modes, `base_channels=32`,
+  batch_size=8, image_size=256:
+  ```
+  diff          params=7,763,041   time/iter=0.311s  peak_vram=2.21GB
+  concat        params=10,709,345  time/iter=0.218s  peak_vram=2.38GB
+  diff_concat   params=14,704,225  time/iter=0.254s  peak_vram=2.79GB
+  ```
+  All three comfortably within the 6GB GPU's budget (Phase 1) — `diff_concat` selected as the
+  primary trained configuration.
+- 2-epoch smoke test of the full `train.py` pipeline with `configs/siamese.yaml` before the full
+  run — confirmed working end-to-end (checkpointing, logging, correct experiment directory).
+- Full 30-epoch training run on the real LEVIR-CD train/val split (same data/split as the Phase 4
+  baseline, for a fair comparison) — training loss and validation IoU improved across training
+  without divergence or NaN losses.
+- Real, measured test-set evaluation on the held-out LEVIR-CD test split (same 128 samples used
+  for the Phase 4 baseline evaluation), using the best checkpoint (selected by validation IoU).
+- Manually inspected the qualitative prediction grid (same 6 test sample indices as the Phase 4
+  grid, for direct visual comparison) — predictions are visually cleaner than the baseline's, with
+  fewer false-positive (yellow) blobs in the diff panel.
+
+**RESULTS (actual, measured — full report: `outputs/metrics/siamese_unet_diff_concat_test_metrics.json`):**
+```
+Model: SiameseUNet (base_channels=32, comparison_mode=diff_concat), 14,704,225 parameters
+Training: 30 epochs, Adam lr=1e-4, BCE+Dice loss, batch_size=8, image_size=256, seed=42
+Best checkpoint: epoch 29 (selected by validation IoU) — same protocol as the Phase 4 baseline
+
+Validation (at best checkpoint, epoch 29):
+  IoU=0.6567  Dice=0.7928  Precision=0.8005  Recall=0.7852  Accuracy=0.9828
+
+TEST SET (held out, 128 samples, real measured results):
+  IoU=0.6442  Dice=0.7836  Precision=0.7982  Recall=0.7695  F1=0.7836  Accuracy=0.9784
+```
+
+### Baseline vs. Siamese — real, apples-to-apples comparison (identical data split, config
+protocol, training budget, checkpoint-selection rule)
+
+| Metric | Baseline U-Net (Phase 4) | Siamese U-Net (Phase 5) | Δ |
+|---|---|---|---|
+| IoU | 0.6250 | **0.6442** | +0.0192 |
+| Dice | 0.7692 | **0.7836** | +0.0144 |
+| Precision | 0.7681 | **0.7982** | +0.0301 |
+| Recall | 0.7703 | 0.7695 | −0.0008 |
+| F1 | 0.7692 | **0.7836** | +0.0144 |
+| Accuracy | 0.9765 | **0.9784** | +0.0019 |
+
+The Siamese U-Net measurably outperforms the baseline on every metric except recall, where the
+two are statistically indistinguishable (a 0.0008 difference on 128 test images is well within
+noise). The improvement is concentrated in precision (+0.03), consistent with the qualitative
+observation that the Siamese model produces fewer false-positive change blobs — plausible given it
+can explicitly compare same-location before/after features at every decoder scale, rather than
+only seeing their raw channel-wise concatenation as the baseline does. This is a real, measured
+result on one training run each, not a hyperparameter-tuned or multi-seed comparison — Phase 8 is
+where a more rigorous multi-experiment comparison (if warranted) would be conducted.
+
+**KNOWN ISSUES:**
+- Same caveat as Phase 4: validation IoU was still trending upward through epoch 29-30 — this is
+  a fixed 30-epoch budget for a controlled comparison with the baseline, not a claim of full
+  convergence for either model.
+- Only the `diff_concat` comparison mode was trained to completion; `diff` and `concat` are fully
+  implemented and tested (forward/backward/optimizer-step verified) but not yet trained end-to-end
+  — that comparison is deferred to Phase 8 (research experiments) since it's an ablation, not a
+  requirement for the Phase 5 milestone (having a working, evaluated Siamese architecture).
+- Single run, single seed — no variance estimate across multiple seeds.
+
+**NEXT PHASE:**
+- PHASE 6 — Training & Experiment Pipeline: the config-driven training/checkpointing/logging
+  infrastructure was actually already built and used in Phases 4-5 (`src/training/`,
+  `configs/*.yaml`, `outputs/experiments/*/history.csv`); Phase 6 work here is primarily about
+  training-curve visualization (epoch vs. loss/IoU/Dice plots from the existing history.csv files)
+  and formalizing experiment tracking, ahead of Phase 7's full rigorous evaluation writeup.
+
+---
+
 ## PHASE 4 — Baseline U-Net
 
 **Date:** 2026-08-23
