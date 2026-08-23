@@ -1,0 +1,25 @@
+# Phase 8 ablation: same as configs/siamese.yaml but comparison_mode=diff (isolates the effect
+# of the comparison mode, all else identical to the primary Phase 5 diff_concat run).
+extends: config.yaml
+
+experiment_name: siamese_unet_diff
+
+model:
+  type: siamese_unet
+  base_channels: 32
+  comparison_mode: diff
+
+dataset:
+  root: data/raw/levir_cd
+  image_size: 256
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+
+training:
+  epochs: 30
+  learning_rate: 0.0001
+  optimizer: adam
+  loss: bce_dice
+  seed: 42

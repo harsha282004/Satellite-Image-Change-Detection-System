@@ -19,6 +19,7 @@ its skip-connection channel counts are derived from the comparison mode via `com
 import torch
 import torch.nn as nn
 
+from models.attention import AttentionUp
 from models.siamese_encoder import SiameseEncoder
 from models.unet import Up
 
@@ -47,11 +48,25 @@ def comparison_channels(feature_channels: int, mode: str) -> int:
 
 
 class SiameseUNet(nn.Module):
-    def __init__(self, in_channels: int = 3, base_channels: int = 32, comparison_mode: str = "diff_concat"):
+    """
+    `use_attention=True` (Phase 8 research experiment) replaces each decoder `Up` block with
+    `AttentionUp` (models/attention.py), gating each skip connection by the coarser decoder
+    context before concatenation, per Oktay et al.'s Attention U-Net. Default False reproduces
+    the exact Phase 5 architecture unchanged.
+    """
+
+    def __init__(
+        self,
+        in_channels: int = 3,
+        base_channels: int = 32,
+        comparison_mode: str = "diff_concat",
+        use_attention: bool = False,
+    ):
         super().__init__()
         if comparison_mode not in COMPARISON_MODES:
             raise ValueError(f"Unknown comparison mode: {comparison_mode!r} (expected one of {COMPARISON_MODES})")
         self.comparison_mode = comparison_mode
+        self.use_attention = use_attention
 
         c = base_channels
         self.encoder = SiameseEncoder(in_channels=in_channels, base_channels=c)
@@ -62,10 +77,11 @@ class SiameseUNet(nn.Module):
         cc4 = comparison_channels(c * 8, comparison_mode)
         cc5 = comparison_channels(c * 16, comparison_mode)
 
-        self.up1 = Up(cc5, cc4, c * 8)
-        self.up2 = Up(c * 8, cc3, c * 4)
-        self.up3 = Up(c * 4, cc2, c * 2)
-        self.up4 = Up(c * 2, cc1, c)
+        up_cls = AttentionUp if use_attention else Up
+        self.up1 = up_cls(cc5, cc4, c * 8)
+        self.up2 = up_cls(c * 8, cc3, c * 4)
+        self.up3 = up_cls(c * 4, cc2, c * 2)
+        self.up4 = up_cls(c * 2, cc1, c)
 
         self.out_conv = nn.Conv2d(c, 1, kernel_size=1)
 

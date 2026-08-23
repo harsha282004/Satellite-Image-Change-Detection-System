@@ -1,0 +1,26 @@
+# Phase 8 experiment: Siamese U-Net + Attention gates (Oktay et al.) on decoder skip
+# connections, comparison_mode=diff_concat (the best-performing mode from Phase 5/8's ablation).
+extends: config.yaml
+
+experiment_name: siamese_unet_diff_concat_attention
+
+model:
+  type: siamese_unet
+  base_channels: 32
+  comparison_mode: diff_concat
+  use_attention: true
+
+dataset:
+  root: data/raw/levir_cd
+  image_size: 256
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+
+training:
+  epochs: 30
+  learning_rate: 0.0001
+  optimizer: adam
+  loss: bce_dice
+  seed: 42

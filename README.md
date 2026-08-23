@@ -153,13 +153,24 @@ is not perfectly bit-reproducible even with a fixed seed — see `DEVELOPMENT_LO
 `DEVELOPMENT_LOG.md` (Phase 4-6 entries) and
 `outputs/metrics/{baseline_unet,siamese_unet_diff_concat}_test_metrics.json`.
 
-A broader, tuned multi-experiment comparison (including the untrained `diff`/`concat` comparison
-modes and any attention/Transformer variants, if justified) is Phase 8 — `NOT YET MEASURED`.
+**Phase 8 research experiments found an even better model.** Adding Attention-U-Net-style
+skip-connection gates to the `diff_concat` Siamese architecture improved *every* metric (not just
+a tradeoff): **test IoU=0.6560, Dice=0.7922, Precision=0.8018, Recall=0.7829, Accuracy=0.9791** —
+the best result across all 5 experiments run to date (baseline, 3 Siamese comparison-mode
+variants, and this attention variant). A genuinely interesting ablation finding: the `diff`-only
+comparison mode alone (IoU=0.5569) actually *underperforms* the simple baseline — raw before/after
+feature context turns out to matter more than an explicit difference signal. Full results,
+interpretation, and the documented reasoning for deferring a Transformer variant and a formal
+hyperparameter search (dataset size, no evidence of a CNN failure mode, scope) are in
+[`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md).
 
 ## Experiments
 
-`NOT YET IMPLEMENTED` — Phase 8. Will compare U-Net vs. Siamese U-Net vs. justified variants using
-real measured metrics only (see `docs/EXPERIMENTS.md`, written then).
+**Implemented (Phase 8).** 5 real experiments compared on identical data/training protocol:
+baseline U-Net, Siamese U-Net (`diff`/`concat`/`diff_concat` comparison modes), and Siamese +
+Attention (`diff_concat`, the winner). Full comparison table, ablation interpretation, and the
+documented justification for deferring a Transformer variant and hyperparameter search:
+[`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md).
 
 ## Limitations
 
@@ -170,8 +181,10 @@ imbalance, domain shift, geographic generalization, benchmark-vs-real-world gap.
 
 ## Future Scope
 
-Additional datasets (WHU-CD, DSIFN-CD), attention/Transformer variants (only if justified by
-measured results), multi-class change typing (only if a suitable labeled dataset is identified).
+Additional datasets (WHU-CD, DSIFN-CD), a Transformer-based variant (deferred in Phase 8 —
+justification in `docs/EXPERIMENTS.md`: small dataset, no evidence of a CNN failure mode it would
+fix), formal hyperparameter search, multi-seed variance estimates, multi-class change typing (only
+if a suitable labeled dataset is identified).
 
 ## Project Structure
 

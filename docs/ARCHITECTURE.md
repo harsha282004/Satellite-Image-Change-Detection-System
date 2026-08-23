@@ -125,6 +125,22 @@ seed: 42
 Real train/val/test metrics for the trained `diff_concat` configuration are in
 `DEVELOPMENT_LOG.md` (Phase 5 entry), not fabricated or estimated here.
 
+## Siamese U-Net + Attention (`models/attention.py`, Phase 8)
+
+**Status: Implemented (Phase 8 research experiment).** `AttentionGate`/`AttentionUp` implement the
+standard additive attention gate from Oktay et al.'s "Attention U-Net" (2018): before a decoder
+skip connection is concatenated, it is re-weighted per-pixel by a gate computed from the coarser
+decoder context at that stage (`sigmoid(relu(W_gate·gate + W_skip·skip))`, elementwise-multiplied
+onto the skip). `SiameseUNet(use_attention=True)` swaps every decoder `Up` block for
+`AttentionUp`; `use_attention=False` (the default) is architecturally identical to the Phase 5
+model — adding the option did not change existing behavior
+(`tests/test_attention.py::test_siamese_unet_use_attention_false_matches_phase5_architecture`).
+
+**Measured result** (`configs/siamese_attention.yaml`, `comparison_mode=diff_concat`,
+15,428,125 parameters — 724K more than plain `diff_concat`): this is the **best-performing model
+across every experiment run so far** — test IoU=0.6560, beating plain `diff_concat`'s 0.6442 on
+every single metric. Full comparison and interpretation: `docs/EXPERIMENTS.md`.
+
 ## Evaluation metrics (`src/evaluation/metrics.py`)
 
 **Status: Implemented (Phase 4).** `MetricAccumulator` accumulates confusion-matrix counts
