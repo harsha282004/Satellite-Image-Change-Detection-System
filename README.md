@@ -51,9 +51,13 @@ Siamese U-Net architecture diagrams, and [`docs/ARCHITECTURE.md`](docs/ARCHITECT
 
 ## Dataset
 
-Primary: **LEVIR-CD** benchmark building change-detection dataset. See
-[`docs/DATASET.md`](docs/DATASET.md) (written in Phase 2) for source, structure, verification, and
-split methodology once acquired. Dataset is **not yet acquired** as of Phase 0.
+Primary: **LEVIR-CD** benchmark building change-detection dataset (Chen & Shi, 2020) — 637
+before/after 1024×1024 image pairs with binary building-change masks, official split: 445 train /
+64 val / 128 test. Acquired via a documented Hugging Face mirror (the official Google Drive/Baidu
+links are manual-download-only) and fully verified: 100% A/B/label pairing, zero corrupted files,
+consistent dimensions across all 637 samples. See [`docs/DATASET.md`](docs/DATASET.md) for full
+source documentation, verification methodology, real measured results, and the split/leakage
+methodology.
 
 ## Installation
 
