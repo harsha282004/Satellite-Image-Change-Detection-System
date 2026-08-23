@@ -11,6 +11,7 @@ training:
   epochs: 30
   learning_rate: 0.0001
   optimizer: adam
+  scheduler: none  # no LR scheduler implemented/used yet — explicit, not silently absent
   loss: bce_dice
   seed: 42
 
