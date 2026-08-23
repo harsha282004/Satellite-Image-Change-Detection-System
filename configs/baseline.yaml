@@ -1,0 +1,23 @@
+# Phase 4 baseline: single-fused-input U-Net (before/after concatenated -> 6-channel input).
+extends: config.yaml
+
+experiment_name: baseline_unet
+
+model:
+  type: baseline_unet
+  base_channels: 32
+
+dataset:
+  root: data/raw/levir_cd
+  image_size: 256
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+
+training:
+  epochs: 30
+  learning_rate: 0.0001
+  optimizer: adam
+  loss: bce_dice
+  seed: 42

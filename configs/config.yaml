@@ -1,0 +1,21 @@
+# Shared defaults. Experiment-specific configs (baseline.yaml, siamese.yaml) override these.
+dataset:
+  root: data/raw/levir_cd
+  image_size: 256
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+
+training:
+  epochs: 30
+  learning_rate: 0.0001
+  optimizer: adam
+  loss: bce_dice
+  seed: 42
+
+paths:
+  checkpoint_dir: outputs/checkpoints
+  experiments_dir: outputs/experiments
+
+device: auto  # "auto" picks cuda if available (see Phase 1 diagnostic), else cpu

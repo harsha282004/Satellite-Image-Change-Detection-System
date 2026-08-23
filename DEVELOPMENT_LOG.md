@@ -5,6 +5,114 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 4 — Baseline U-Net
+
+**Date:** 2026-08-23
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `models/unet.py`: standard 4-stage U-Net (`DoubleConv`/`Down`/`Up`, skip connections,
+  `base_channels=32` for VRAM tractability) plus `BaselineChangeUNet`, which concatenates the
+  before/after images into a fused 6-channel input (the Phase 4 "single fused input" baseline
+  design, deliberately simpler than the Phase 5 Siamese architecture).
+- `models/losses.py`: `DiceLoss`, `BCEDiceLoss` (used for the baseline), `get_loss()` factory;
+  all operate on raw logits for numerical stability.
+- `src/evaluation/metrics.py`: `MetricAccumulator` — accumulates TP/FP/FN/TN across a whole
+  split (not per-batch averaging, which would be wrong under class imbalance) and computes
+  IoU/Dice/Precision/Recall/F1/Accuracy.
+- `src/training/`: `checkpoint.py` (save/load with epoch/metrics/config bundled in),
+  `logger.py` (per-epoch CSV+JSON history), `validate.py` (shared val/test evaluation loop),
+  `trainer.py` (`Trainer` class: train-one-epoch, fit loop, best-checkpoint-by-val-IoU
+  selection — written model-agnostically so it's reused unchanged for Phase 5's Siamese model),
+  `train.py` (YAML-config-driven entry point with `extends:` base-config merging, seeding, device
+  auto-detection).
+- `configs/config.yaml` (shared defaults) and `configs/baseline.yaml` (baseline experiment).
+- `src/evaluation/evaluate.py`: test-set evaluation (real IoU/Dice/Precision/Recall/F1/Accuracy)
+  plus a 6-column qualitative prediction grid (before/after/GT/prediction/overlay/diff with
+  FP=yellow, FN=blue, TP=green coding).
+- `docs/ARCHITECTURE.md`: documents the implemented baseline (explicitly marks the Siamese
+  architecture as "Planned, not yet implemented" rather than describing it as built).
+- 11 new pytest tests (`tests/test_model.py`, `tests/test_metrics.py`): forward pass and output
+  shape, backward pass + optimizer step actually changes parameters, Dice loss correctness on a
+  synthetic perfect prediction, metric correctness on synthetic perfect/wrong/accumulated cases.
+
+**FILES CREATED:**
+- `models/__init__.py`, `models/unet.py`, `models/losses.py`
+- `src/evaluation/__init__.py`, `src/evaluation/metrics.py`, `src/evaluation/evaluate.py`
+- `src/training/__init__.py`, `src/training/checkpoint.py`, `src/training/logger.py`,
+  `src/training/validate.py`, `src/training/trainer.py`, `src/training/train.py`
+- `configs/config.yaml`, `configs/baseline.yaml`
+- `docs/ARCHITECTURE.md`
+- `tests/test_model.py`, `tests/test_metrics.py`
+- `outputs/checkpoints/baseline_unet/{best,last}.pt` (gitignored)
+- `outputs/experiments/baseline_unet/{history.csv,history.json}` (gitignored)
+- `outputs/metrics/baseline_unet_test_metrics.json` (gitignored)
+- `outputs/visualizations/baseline_unet_test_predictions.png` (gitignored)
+
+**FILES MODIFIED:**
+- None outside the above
+
+**COMMANDS EXECUTED:**
+- `pytest tests/ -v` (27 tests, before training)
+- `python -m src.training.train --config configs/baseline.yaml --epochs 2` (smoke test)
+- `python -m src.training.train --config configs/baseline.yaml --epochs 1` (timing check: ~50s/epoch)
+- `python -m src.training.train --config configs/baseline.yaml` (real 30-epoch run, GPU, background)
+- `python -m src.evaluation.evaluate --config configs/baseline.yaml --checkpoint outputs/checkpoints/baseline_unet/best.pt`
+
+**TESTS:**
+- `pytest tests/`: 27/27 passed (16 from Phase 3 + 11 new: `UNet`/`BaselineChangeUNet` forward
+  shape, backward+optimizer-step parameter-change check, `DiceLoss`/`BCEDiceLoss` correctness,
+  `get_loss` factory, `MetricAccumulator`/`confusion_counts`/`logits_to_binary_preds` correctness
+  on synthetic perfect/inverted/multi-batch cases).
+- 2-epoch smoke test of the full `train.py` pipeline (config loading, dataloaders, model,
+  optimizer, checkpointing, CSV/JSON logging) before committing to a full run — confirmed working
+  end-to-end.
+- Full 30-epoch training run on the real LEVIR-CD train/val split (GPU, RTX 4050) — training loss
+  and validation IoU both improved monotonically-ish across training (see history.csv), converging
+  without divergence or NaN losses.
+- Real, measured test-set evaluation (`src/evaluation/evaluate.py`) on the held-out LEVIR-CD test
+  split (128 samples, never seen during training/validation) using the best checkpoint (selected by
+  validation IoU, not by test performance — no test-set leakage into model selection).
+- Manually inspected the qualitative prediction grid (6 test samples: before/after/GT/prediction/
+  overlay/diff) — predictions visually track ground truth closely (majority true-positive/green in
+  the diff panel), including correctly near-empty predictions on genuinely no-change scenes.
+
+**RESULTS (actual, measured — full report: `outputs/metrics/baseline_unet_test_metrics.json`):**
+```
+Model: BaselineChangeUNet (base_channels=32), 7,763,905 parameters
+Training: 30 epochs, Adam lr=1e-4, BCE+Dice loss, batch_size=8, image_size=256, seed=42
+Best checkpoint: epoch 29 (selected by validation IoU)
+
+Validation (at best checkpoint, epoch 29):
+  IoU=0.6103  Dice=0.7580  Precision=0.7454  Recall=0.7710  Accuracy=0.9793
+
+TEST SET (held out, 128 samples, real measured results):
+  IoU=0.6250  Dice=0.7692  Precision=0.7681  Recall=0.7703  F1=0.7692  Accuracy=0.9765
+```
+Training time: ~50 seconds/epoch on the RTX 4050 Laptop GPU (Phase 1), ~25 minutes total for 30
+epochs. Inference/evaluation on the 128-sample test set: well under 1 minute.
+
+**KNOWN ISSUES:**
+- Training loss and validation IoU were still improving at epoch 30 (last epoch's val_iou=0.6073
+  was close to but slightly below the epoch-29 best of 0.6103) — the model had likely not fully
+  converged within the 30-epoch budget. This is an intentionally scoped baseline run, not a
+  claim of a fully tuned/converged model; Phase 8 (research experiments) is where tuning/longer
+  training is considered if it provides measurable value.
+- The baseline's simple channel-concatenation design (vs. a true Siamese shared encoder) is a
+  known architectural limitation, not a bug — it is the documented reason Phase 5 exists.
+- No hyperparameter search was performed; `configs/baseline.yaml` values are reasonable defaults,
+  not the result of tuning.
+
+**NEXT PHASE:**
+- PHASE 5 — Siamese U-Net: implement `models/siamese_encoder.py` and `models/siamese_unet.py`
+  with a shared encoder between before/after branches and configurable feature comparison
+  (absolute difference / concatenation / both), verify forward/backward/optimizer-step, then train
+  and evaluate it with the same `Trainer`/`evaluate.py` pipeline built in Phase 4 for a real,
+  apples-to-apples comparison against this baseline.
+
+---
+
 ## PHASE 3 — Data Preprocessing & DataLoader
 
 **Date:** 2026-08-23

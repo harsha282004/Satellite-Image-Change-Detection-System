@@ -93,13 +93,30 @@ The `requirements.txt` install alone pulls the CPU build of PyTorch; see the not
 
 ## Training
 
-`NOT YET IMPLEMENTED` — Phase 4 (baseline U-Net), Phase 5 (Siamese U-Net), Phase 6 (training
-pipeline/configs).
+Baseline U-Net: **Implemented (Phase 4).** Siamese U-Net: `NOT YET IMPLEMENTED` — Phase 5.
+
+```bash
+python -m src.training.train --config configs/baseline.yaml
+```
+
+Trains for the epoch count in the config (`--epochs N` overrides it), logging per-epoch
+train/val loss and IoU/Dice/Precision/Recall/F1/Accuracy to
+`outputs/experiments/<experiment_name>/history.csv`, and saving `best.pt` (selected by validation
+IoU)/`last.pt` checkpoints to `outputs/checkpoints/<experiment_name>/`.
 
 ## Evaluation
 
-`NOT YET IMPLEMENTED` — Phase 7. Metrics reported will be IoU, Dice, Precision, Recall, F1, and
-Accuracy on a held-out test set, with real measured numbers only.
+Implemented (Phase 4) for the baseline; the full rigorous Phase 7 evaluation (final-model
+comparison, training curves, `docs/EVALUATION.md`) is `NOT YET IMPLEMENTED`.
+
+```bash
+python -m src.evaluation.evaluate --config configs/baseline.yaml \
+    --checkpoint outputs/checkpoints/baseline_unet/best.pt
+```
+
+Reports real, measured IoU/Dice/Precision/Recall/F1/Accuracy on the held-out test split and saves
+a qualitative prediction grid (before/after/ground-truth/prediction/overlay/diff) to
+`outputs/visualizations/`. See Results below for the actual baseline numbers.
 
 ## Inference
 
@@ -111,8 +128,26 @@ Accuracy on a held-out test set, with real measured numbers only.
 
 ## Results
 
-`NOT YET MEASURED`. No model has been trained. This section will be filled in with real metrics
-after Phase 7.
+**Baseline U-Net (Phase 4), real measured test-set results** (128 held-out LEVIR-CD test samples,
+never used in training or checkpoint selection):
+
+| Metric | Value |
+|--------|-------|
+| IoU | 0.6250 |
+| Dice | 0.7692 |
+| Precision | 0.7681 |
+| Recall | 0.7703 |
+| F1 | 0.7692 |
+| Accuracy | 0.9765 |
+
+Training: 30 epochs, Adam (lr=1e-4), BCE+Dice loss, batch size 8, image size 256, single NVIDIA
+RTX 4050 Laptop GPU, ~50s/epoch (~25 min total). Full details, training curve numbers, and
+known-issue notes (training had not fully converged within the 30-epoch budget) in
+`DEVELOPMENT_LOG.md` (Phase 4 entry) and `outputs/metrics/baseline_unet_test_metrics.json`.
+
+This is the simple channel-concatenation baseline, not the project's primary Siamese U-Net
+contribution (`NOT YET MEASURED` — Phase 5). A full comparison table across all implemented models
+will be added in Phase 7/8.
 
 ## Experiments
 
