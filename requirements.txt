@@ -1,22 +1,30 @@
-# Phase 0 placeholder. Exact versions are installed and verified in Phase 1
-# (see DEVELOPMENT_LOG.md for the environment diagnostic report), then pinned here.
+# Versions pinned from the environment actually installed and verified in Phase 1
+# (see DEVELOPMENT_LOG.md / scripts/check_env.py for the diagnostic report).
+#
+# torch/torchvision were installed with CUDA 12.4 wheels via:
+#   pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cu124
+# On a machine without an NVIDIA GPU, install the CPU build instead:
+#   pip install torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cpu
+# `pip install -r requirements.txt` alone installs the CPU build (no CUDA index configured here);
+# use the command above first if a CUDA build is wanted, since pip will then leave the
+# already-installed matching version alone.
 
 # Core
-torch
-torchvision
-numpy
-pandas
-opencv-python
-Pillow
-scikit-learn
-PyYAML
+torch==2.6.0
+torchvision==0.21.0
+numpy==2.5.2
+pandas==3.0.5
+opencv-python==5.0.0.93
+Pillow==12.3.0
+scikit-learn==1.9.0
+PyYAML==6.0.3
 
 # Visualization
-matplotlib
-plotly
+matplotlib==3.11.1
+plotly==6.9.0
 
 # Dashboard
-streamlit
+streamlit==1.62.0
 
 # Geospatial (introduced only when required by Phase 11)
 # rasterio
@@ -25,5 +33,5 @@ streamlit
 # folium
 
 # Utilities
-python-dotenv
-tqdm
+python-dotenv==1.2.3
+tqdm==4.70.0

@@ -73,7 +73,19 @@ pip install -r requirements.txt
 
 ## Environment Setup
 
-`NOT YET IMPLEMENTED` — Phase 1.
+Implemented (Phase 1). After creating and activating the virtual environment (see Installation
+above), verify the environment with:
+
+```bash
+python scripts/check_env.py
+```
+
+This reports Python/PyTorch/torchvision versions, CUDA availability, GPU name/VRAM, and runs a
+real tensor operation on both the selected device and an explicit CPU fallback. Measured on the
+development machine (see `DEVELOPMENT_LOG.md` Phase 1 for the full report): PyTorch 2.6.0+cu124,
+torchvision 0.21.0+cu124, CUDA available, GPU = NVIDIA GeForce RTX 4050 Laptop GPU (6 GB VRAM).
+The `requirements.txt` install alone pulls the CPU build of PyTorch; see the note at the top of
+`requirements.txt` for the CUDA-wheel install command used to get the GPU build above.
 
 ## Training
 

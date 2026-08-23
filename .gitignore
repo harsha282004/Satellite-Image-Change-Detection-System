@@ -59,7 +59,10 @@ Thumbs.db
 .idea/
 
 # Claude Code local
-.claude/settings.local.json
+.claude/
+
+# Local diagnostic artifacts (regenerable via scripts/check_env.py)
+outputs/env_freeze.txt
 
 # Logs
 *.log
