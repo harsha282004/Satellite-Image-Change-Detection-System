@@ -5,6 +5,93 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 3 — Data Preprocessing & DataLoader
+
+**Date:** 2026-08-23
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/data/preprocessing.py`: image/mask loading (OpenCV), mask binarization (explicit
+  threshold at 127, addressing the non-binary mask values found during Phase 2 verification),
+  resize (linear for images, nearest-neighbor for masks to preserve binary values), [0,1]
+  normalization, and numpy->CHW-float-tensor conversion.
+- `src/data/augmentation.py`: `PairedAugmentor` applying identical spatial transforms (horizontal
+  flip, vertical flip, 90-degree rotation, random-crop+resize "scale" jitter) to the before image,
+  after image, and mask from one shared random draw per call, plus independent brightness jitter
+  applied to the before/after images only (never the mask).
+- `src/data/dataset.py`: `LEVIRCDDataset(Dataset)` — verifies A/B/label pairing at construction
+  time (raises `ValueError` listing unpaired files, or `FileNotFoundError` if the split directory
+  is missing), returns `(before, after, mask)` tensors per the pipeline above.
+- `src/data/dataloader.py`: `get_dataloader()` wrapping `LEVIRCDDataset` in a `torch.utils.data.
+  DataLoader`, defaulting to shuffle+augment on for `train` and off for `val`/`test`.
+- `scripts/verify_dataloader.py`: end-to-end Phase 3 verification against the real LEVIR-CD data
+  (train/val/test `dataset[0]`, an augmented sample, DataLoader batch shapes, and an augmentation
+  visual sanity check grid).
+- `tests/` pytest suite (16 tests) using small synthetic images (per the rule to avoid requiring
+  the full multi-GB dataset for unit tests): `test_preprocessing.py`, `test_augmentation.py`
+  (including a same-pixel-tracking test proving spatial augmentation moves the mask in lockstep
+  with the images), `test_dataset.py` (pairing-error and missing-split-dir error paths, correct
+  tensor shapes/dtypes, DataLoader batch shapes and train/val augment-default behavior).
+
+**FILES CREATED:**
+- `src/__init__.py`, `src/data/__init__.py`
+- `src/data/preprocessing.py`, `src/data/augmentation.py`, `src/data/dataset.py`,
+  `src/data/dataloader.py`
+- `scripts/verify_dataloader.py`
+- `tests/conftest.py`, `tests/test_preprocessing.py`, `tests/test_augmentation.py`,
+  `tests/test_dataset.py`
+- `outputs/visualizations/augmentation_samples.png` (gitignored)
+
+**FILES MODIFIED:**
+- `requirements.txt` (added `pytest`, `huggingface_hub`)
+
+**COMMANDS EXECUTED:**
+- `pip install pytest`
+- `venv/Scripts/python.exe scripts/verify_dataloader.py`
+- `venv/Scripts/python.exe -m pytest tests/ -v`
+
+**TESTS:**
+- `scripts/verify_dataloader.py` against the real dataset: asserts tensor shapes
+  `(3,256,256)`/`(3,256,256)`/`(1,256,256)`, dtype `float32`, image value range `[0,1]`, and mask
+  values `⊆ {0,1}` for `train[0]`, `val[0]`, `test[0]`, and an augmented `train[0]`; asserts
+  DataLoader batch shapes for `train` (batch_size=4, drop_last=True, 111 batches) and `val`
+  (batch_size=4, 16 batches); renders and visually inspected an augmentation sample grid.
+- `pytest tests/` — 16/16 passed, covering mask binarization thresholding, normalization range,
+  resize dimension/interpolation-mode correctness, tensor shape/dtype conversion, paired-spatial-
+  augmentation correctness (marker-pixel tracking), zero-probability no-op augmentation, shape
+  preservation under scale jitter, dataset length/pairing/error-path correctness, and DataLoader
+  batch shapes and augment defaults.
+
+**RESULTS (actual, measured):**
+```
+Real-data verification (scripts/verify_dataloader.py): ALL CHECKS PASSED
+  train[0]: before/after=(3,256,256) float32 in [0,1], mask=(1,256,256) float32 {0,1} - OK
+  val[0], test[0]: same shape/dtype/range checks - OK
+  train[0] with augmentation: same shape/dtype/range checks - OK
+  DataLoader(train, batch_size=4): 111 batches, shapes (4,3,256,256)/(4,3,256,256)/(4,1,256,256) - OK
+  DataLoader(val, batch_size=4): 16 batches - OK
+pytest tests/: 16 passed, 0 failed, 2.17s
+```
+Augmentation visual check confirmed by direct image inspection: flips/rotations/scale-jitter move
+the mask's changed region in exact lockstep with the before/after images across 5 sampled
+variants — no misalignment observed.
+
+**KNOWN ISSUES:**
+- `num_workers=0` used by default in `get_dataloader` (single-process loading) — adequate at
+  current dataset size/throughput; can be revisited in Phase 6 if training-time data loading
+  becomes a bottleneck.
+- Default `image_size=256` (not the native 1024) chosen for compute/VRAM tractability on the
+  6 GB GPU identified in Phase 1; this is a deliberate, documented choice, not a limitation
+  discovered by accident.
+
+**NEXT PHASE:**
+- PHASE 4 — Baseline U-Net: implement `models/unet.py`, `models/losses.py` (BCE, Dice, BCE+Dice),
+  evaluation metrics (IoU/Dice/Precision/Recall/F1/Accuracy), train the baseline on a
+  single-fused-input formulation, and report real test-set metrics (never fabricated).
+
+---
+
 ## PHASE 2 — Dataset Acquisition & Understanding
 
 **Date:** 2026-08-23

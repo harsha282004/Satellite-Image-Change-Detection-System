@@ -35,3 +35,9 @@ streamlit==1.62.0
 # Utilities
 python-dotenv==1.2.3
 tqdm==4.70.0
+
+# Testing
+pytest==9.1.1
+
+# Dataset acquisition (used to download the LEVIR-CD mirror, see docs/DATASET.md)
+huggingface_hub==1.28.0
