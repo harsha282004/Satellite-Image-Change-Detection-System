@@ -5,6 +5,105 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 9 — Change Region Analysis & Quantification
+
+**Date:** 2026-08-23
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/analysis/regions.py`: `extract_regions()` — 8-connected-component labeling
+  (`scipy.ndimage.label`) of a binary change mask, returning per-region pixel count, centroid, and
+  bounding box, sorted largest-first. `min_region_pixels` allows explicit (opt-in, not silent)
+  noise filtering.
+- `src/analysis/area.py`: `pixel_count_to_area()` never assumes a physical pixel size — callers
+  must always pass one explicitly (`PROJECT_CONTEXT.md`'s stated requirement). The one documented
+  default this project actually uses, `levir_cd_effective_pixel_size()`, derives the *effective*
+  ground pixel size for this project's resized model inputs: LEVIR-CD tiles are 1024px at a
+  documented 0.5 m/pixel (512m x 512m fixed ground footprint, Phase 2), but this project's models
+  operate on tiles resized to 256px (`docs/ARCHITECTURE.md`) — reusing the raw 0.5 m/pixel figure
+  against the resized mask would silently overstate area by 16x. The function makes this
+  derivation explicit and testable rather than leaving it as an easy-to-miss caller error.
+- `src/analysis/statistics.py`: `compute_change_statistics()` — aggregates region count, total/
+  percent changed pixels, largest/average region size, and (only when `pixel_size_meters` is
+  passed) physical-area conversions.
+- `src/inference/predict.py`: `predict_mask()` (pure function, any `model(before, after)->logits`)
+  and `Predictor` (loads a config+checkpoint once, predicts repeatedly — built with Phase 10's
+  dashboard in mind, per Rule 6, so that phase doesn't need to duplicate this logic).
+- `scripts/analyze_predictions.py`: end-to-end demonstration — loads the current best model
+  (Phase 8's Siamese + Attention), runs real inference on 6 real test images, extracts regions,
+  computes statistics with the documented effective pixel size, and saves both a JSON report and
+  per-sample region-bounding-box visualizations.
+- 19 new pytest tests: `tests/test_analysis.py` (10 — region extraction on synthetic masks with
+  known geometry: empty mask, single region with exact expected pixel-count/bbox/centroid, two
+  regions sorted by size, 8-connectivity diagonal-merge behavior, min-size filtering, area-
+  conversion arithmetic, the LEVIR-CD pixel-size derivation at multiple resize targets,
+  full-statistics correctness with and without a pixel size); `tests/test_predict.py` (3 —
+  `predict_mask` output shape/dtype/binariness, input-size-independent-of-model-size handling,
+  threshold sensitivity).
+
+**FILES CREATED:**
+- `src/analysis/__init__.py`, `src/analysis/regions.py`, `src/analysis/area.py`,
+  `src/analysis/statistics.py`
+- `src/inference/__init__.py`, `src/inference/predict.py`
+- `scripts/analyze_predictions.py`
+- `tests/test_analysis.py`, `tests/test_predict.py`
+- `outputs/metrics/region_analysis_demo.json` (gitignored)
+- `outputs/visualizations/region_analysis/*.png` (gitignored, 6 real sample visualizations)
+
+**FILES MODIFIED:**
+- `README.md` (Inference & Change Analysis section)
+
+**COMMANDS EXECUTED:**
+- `pytest tests/ -q` (before and after new code, 47 -> 60 tests)
+- `python scripts/analyze_predictions.py --config configs/siamese_attention.yaml --checkpoint outputs/checkpoints/siamese_unet_diff_concat_attention/best.pt`
+
+**TESTS:**
+- `pytest tests/`: 60/60 passed (47 from Phase 8 + 13 new: 10 analysis + 3 predict).
+- Region-extraction correctness verified against hand-computed expected values on synthetic masks
+  with known geometry (e.g. a 3x4-pixel rectangle at a known offset must report exactly 12 pixels,
+  the exact bbox, and centroid (3.0, 4.5) — not just "some plausible-looking output").
+- Real end-to-end run of `scripts/analyze_predictions.py` against the actual best trained
+  checkpoint on real LEVIR-CD test images (not synthetic) — manually inspected 2 of the 6 output
+  visualizations: a dense-subdivision scene (54 regions correctly bounding-boxed around real
+  building clusters) and a genuinely no-change forest scene with a strong seasonal lighting/
+  vegetation difference between before/after (before: brown/dry; after: green/lush) — the model
+  correctly predicted only 3 tiny regions (0.05% of the tile), a reassuring real data point for
+  `PROJECT_CONTEXT.md`'s "actual change vs. apparent difference" principle, though only one
+  anecdotal example, not a systematic robustness evaluation.
+
+**RESULTS (actual, measured — full report: `outputs/metrics/region_analysis_demo.json`):**
+```
+Effective pixel size for this project's 256px model inputs: 2.000 m/pixel
+  (derivation: 1024px * 0.5 m/px / 256px = 2.0 m/px)
+
+test_1.png:   13 regions, 1.34% changed,  3,504.0 m^2 total changed area
+test_121.png: 10 regions, 2.50% changed,  6,544.0 m^2 total changed area
+test_29.png:  54 regions, 14.97% changed, 39,240.0 m^2 total changed area (dense subdivision)
+test_52.png:  56 regions, 4.37% changed,  11,452.0 m^2 total changed area
+test_75.png:  37 regions, 7.39% changed,  19,384.0 m^2 total changed area
+test_99.png:  3 regions,  0.05% changed,  136.0 m^2 total changed area (no-change scene)
+```
+
+**KNOWN ISSUES:**
+- Area figures are only as accurate as (a) the model's predicted mask and (b) the documented
+  pixel-size assumption — they are not validated against any independent ground-truth area
+  measurement, and should be read as illustrative quantification of the model's own predictions,
+  not as an externally verified physical measurement.
+- `min_region_pixels=4` default in `scripts/analyze_predictions.py` is a chosen noise filter, not
+  a principled threshold derived from data — documented as a CLI default, not hidden.
+- The seasonal-lighting robustness observation above is one anecdotal example from manual
+  inspection, not a systematic evaluation across many such cases — do not generalize from it.
+
+**NEXT PHASE:**
+- PHASE 10 — Streamlit Dashboard: build `dashboard/app.py` on top of the now-complete
+  `Predictor`/`src/analysis` pipeline — upload before/after images, run real model inference
+  (Phase 8's best checkpoint), display the mask/overlay/region statistics computed by the exact
+  same code already verified in this phase. No simulated metrics; anything not wired to a real
+  model call will be marked unavailable rather than faked, per `DEVELOPMENT_RULES.md`.
+
+---
+
 ## PHASE 8 — Model Improvement & Research Experiments
 
 **Date:** 2026-08-23

@@ -120,9 +120,28 @@ Reports real, measured IoU/Dice/Precision/Recall/F1/Accuracy on the held-out tes
 a qualitative prediction grid (before/after/ground-truth/prediction/overlay/diff) to
 `outputs/visualizations/`. See Results below for the actual baseline numbers.
 
-## Inference
+## Inference & Change Analysis
 
-`NOT YET IMPLEMENTED` — Phase 9 (`src/inference/predict.py`).
+**Implemented (Phase 9).** `src/inference/predict.py` (`Predictor` class) loads a config +
+checkpoint once and predicts a binary change mask from a before/after image pair.
+`src/analysis/{regions,area,statistics}.py` extract connected-component change regions from a
+predicted mask and compute region count, total/percent changed pixels, largest/average region
+size, and — only when a pixel size is explicitly provided, never assumed — physical area in
+m²/hectares (LEVIR-CD's documented 0.5 m/pixel, adjusted for the model's resized input resolution:
+see `src/analysis/area.py::levir_cd_effective_pixel_size`).
+
+```bash
+python scripts/analyze_predictions.py --config configs/siamese_attention.yaml \
+    --checkpoint outputs/checkpoints/siamese_unet_diff_concat_attention/best.pt
+```
+
+Runs the current best model on real test images, saves a region-count/area report
+(`outputs/metrics/region_analysis_demo.json`) and per-sample visualizations with region bounding
+boxes (`outputs/visualizations/region_analysis/`). Real example measured output: a dense-
+subdivision test tile yielded 54 detected regions, ~15% of the tile changed, 3.92 hectares total
+changed area; a genuinely no-change tile (despite a strong seasonal lighting/vegetation difference
+between before/after — the kind of apparent-but-not-real difference `PROJECT_CONTEXT.md` warns
+about) correctly yielded only 3 tiny regions covering 0.05% of the tile.
 
 ## Dashboard
 
