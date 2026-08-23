@@ -1,0 +1,29 @@
+# Phase 0 placeholder. Exact versions are installed and verified in Phase 1
+# (see DEVELOPMENT_LOG.md for the environment diagnostic report), then pinned here.
+
+# Core
+torch
+torchvision
+numpy
+pandas
+opencv-python
+Pillow
+scikit-learn
+PyYAML
+
+# Visualization
+matplotlib
+plotly
+
+# Dashboard
+streamlit
+
+# Geospatial (introduced only when required by Phase 11)
+# rasterio
+# geopandas
+# shapely
+# folium
+
+# Utilities
+python-dotenv
+tqdm

@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Environment / secrets
+.env
+*.env.local
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data (never commit raw/processed satellite imagery or benchmark datasets)
+data/raw/*
+data/processed/*
+data/train/*
+data/val/*
+data/test/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/train/.gitkeep
+!data/val/.gitkeep
+!data/test/.gitkeep
+
+# Model artifacts and outputs (large / regenerable)
+outputs/checkpoints/*
+outputs/predictions/*
+outputs/visualizations/*
+outputs/metrics/*
+outputs/experiments/*
+!outputs/checkpoints/.gitkeep
+!outputs/predictions/.gitkeep
+!outputs/visualizations/.gitkeep
+!outputs/metrics/.gitkeep
+!outputs/experiments/.gitkeep
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code local
+.claude/settings.local.json
+
+# Logs
+*.log
