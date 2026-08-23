@@ -5,6 +5,117 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 11 — Real-World Satellite Demonstration
+
+**Date:** 2026-08-23
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- Identified a reliable, unauthenticated Sentinel-2 source: Earth Search STAC API (Element84,
+  AWS Open Data), after confirming (per the same reasoning as `docs/DATASET.md`'s LEVIR-CD
+  acquisition) that the official Copernicus Data Space portal requires account registration —
+  manual-download-only, so not used for automated acquisition.
+- `src/geospatial/raster.py`: `search_sentinel2_items()`, `get_item_by_id()`,
+  `fetch_visual_crop()` — STAC search plus windowed reads of remote Cloud-Optimized GeoTIFFs over
+  HTTP (rasterio `/vsicurl/`), avoiding full ~100+ MB tile downloads for a small area of interest.
+- `scripts/real_world_demo.py`: full reproducible pipeline (select location → fetch date-A/date-B
+  imagery → preprocess → run the Phase 8 best model → predicted mask → statistics → save
+  visualization + a `report.json` with every parameter needed to reproduce the run, per Rule 7).
+- Selected location/dates by actually searching the STAC catalog (not guessing blind): a
+  Pflugerville, TX suburb (within LEVIR-CD's own source region, for thematic continuity — a
+  deliberate choice, not a claim it improves result validity), 2019-12-06 vs. 2024-12-19 (both
+  near-zero cloud cover, both winter to reduce seasonal-lighting confound, ~5 year gap for real
+  development to occur). Verified visually before committing to this location: fetched and
+  inspected actual before/after crops, confirmed genuine visible new construction (a large
+  commercial/industrial building complex) before writing any downstream documentation.
+- `docs/REAL_WORLD_DEMO.md`: full write-up — explicit resolution-gap table (LEVIR-CD 0.5 m/pixel
+  vs. Sentinel-2 10 m/pixel = **20x coarser**, "a typical suburban house occupies a fraction of
+  one pixel to a few pixels" at this resolution), method, the real measured prediction (not a
+  validated metric — no ground truth exists), an honest split between what the model got right
+  (correctly flagged the one visually-confirmable large new building) and what's uncertain
+  (several smaller predicted regions that could not be independently verified as real vs. domain-
+  gap artifacts), and a status-summary table separating "measured/documented" from "not possible
+  without ground truth" and "future scope".
+- `README.md` "Real-World Demonstration" section added, explicitly distinguished from the
+  benchmark "Results" section per `PROJECT_CONTEXT.md`'s requirement.
+- 2 smoke tests (`tests/test_geospatial.py`) covering the network-independent constants —
+  consistent with how Phase 2's dataset download and Phase 9's real-image script are also outside
+  the fast pytest suite for their genuinely network-dependent parts.
+
+**FILES CREATED:**
+- `src/geospatial/__init__.py`, `src/geospatial/raster.py`
+- `scripts/real_world_demo.py`
+- `docs/REAL_WORLD_DEMO.md`
+- `tests/test_geospatial.py`
+- `outputs/real_world_demo/{before,after,predicted_mask,overlay,combined}.png`, `report.json` (gitignored)
+
+**FILES MODIFIED:**
+- `requirements.txt` (added `rasterio==1.5.1`, `pystac-client==0.9.0`; documented that
+  geopandas/shapely/folium were deliberately not added since no vector export or interactive map
+  was actually built — Rule 5, don't introduce unneeded complexity)
+- `README.md` (new "Real-World Demonstration" section)
+
+**COMMANDS EXECUTED:**
+- `pip install rasterio pystac-client`
+- STAC search queries (inline, then via `src/geospatial/raster.py`) to find low-cloud-cover
+  scenes and pick a before/after pair
+- Ad hoc exploratory fetch + visual inspection of candidate crops (to confirm genuine visible
+  change before committing to a location) — then superseded by the reusable
+  `scripts/real_world_demo.py`, and the ad hoc exploration files deleted
+- `python scripts/real_world_demo.py`
+- `pytest tests/ -q` (64 -> 66 tests)
+
+**TESTS:**
+- `pytest tests/`: 66/66 passed.
+- Manually inspected the actual before/after Sentinel-2 crops (visual confirmation of genuine new
+  construction) before treating the location/dates as final — not assumed to show interesting
+  change without looking.
+- Ran `scripts/real_world_demo.py` end-to-end for real: confirmed it reproduces the same
+  quantitative result (1,621/65,536 pixels changed, 19 regions) as the earlier ad hoc exploration
+  of the same crop, confirming the formalized script is correct and reproducible.
+- Manually inspected `outputs/real_world_demo/combined.png` — confirmed the largest predicted
+  region visually overlaps the real, visually-confirmed new building complex.
+
+**RESULTS (actual, measured — this is a prediction, NOT a validated metric; full report:
+`outputs/real_world_demo/report.json`):**
+```
+Location: Pflugerville, TX suburb (bbox [-97.65, 30.41, -97.59, 30.46])
+Before: 2019-12-06 (S2A_14RPU_20191206_1_L2A, cloud cover 0.001%)
+After:  2024-12-19 (S2A_14RPU_20241219_0_L2A, cloud cover 0.003%)
+Resolution gap: Sentinel-2 10 m/pixel vs. LEVIR-CD training data 0.5 m/pixel = 20x coarser
+
+Predicted: 1,621 / 65,536 pixels changed (2.47%), 19 regions (>=4px)
+Ground truth available: No — no IoU/Dice/precision/recall/accuracy computed or claimed.
+```
+Qualitative finding: the model's largest predicted region correctly corresponds to a real,
+visually-confirmed new building complex, despite the 20x resolution gap — a genuine positive
+signal. Several smaller predicted regions could not be independently confirmed as real changes at
+this resolution — reported honestly as uncertain, not claimed as either true or false positives.
+
+**KNOWN ISSUES:**
+- **This is one location, one date pair, zero ground-truth-validated metrics.** It must not be
+  read as evidence of general real-world reliability — `docs/REAL_WORLD_DEMO.md` says this
+  explicitly, and so does this log entry, to guard against the result being cited out of context
+  later in this project's own documentation.
+- The `src/analysis/area.py::levir_cd_effective_pixel_size` physical-area assumption does not
+  apply to Sentinel-2 imagery (different native resolution) — `scripts/real_world_demo.py`
+  deliberately does not report a physical area for this reason, rather than misapplying the
+  LEVIR-CD-derived assumption.
+- No cloud/shadow masking, no explicit re-registration/alignment step beyond Sentinel-2's own
+  standard georeferencing — both are real, undemonstrated risk factors for any real-world change
+  detection pipeline, noted but not implemented in this phase.
+
+**NEXT PHASE:**
+- PHASE 12 — Final Integration & Documentation: write `docs/LIMITATIONS.md` (drawing on every
+  limitation surfaced across Phases 2-11 — class imbalance, GPU non-determinism, single-seed
+  experiments, the resolution/domain gap just documented here, etc.), verify the complete
+  end-to-end workflow (upload → preprocess → model → mask → regions → visualization → dashboard)
+  including edge cases (invalid input, mismatched dimensions, missing files, CPU-only fallback),
+  and finalize all documentation to describe only what is actually implemented.
+
+---
+
 ## PHASE 10 — Streamlit Dashboard
 
 **Date:** 2026-08-23

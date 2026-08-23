@@ -204,6 +204,26 @@ Attention (`diff_concat`, the winner). Full comparison table, ablation interpret
 documented justification for deferring a Transformer variant and hyperparameter search:
 [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md).
 
+## Real-World Demonstration
+
+**Implemented (Phase 11) — a demonstration, explicitly not a validated evaluation.** Ran the best
+model on real, independently-sourced Sentinel-2 imagery (Earth Search STAC API, AWS-hosted, no
+authentication required) for a Pflugerville, TX suburb, 2019-12-06 vs. 2024-12-19:
+
+```bash
+python scripts/real_world_demo.py
+```
+
+**Critical caveat, stated plainly:** Sentinel-2 is 10 m/pixel — **20x coarser** than the 0.5 m/pixel
+LEVIR-CD imagery the model was trained on. The model correctly detected the scene's most obvious
+real change (a large new building complex, visually confirmed present in the after-image and
+absent in the before-image), but also predicted several smaller regions that could not be
+independently verified as real vs. domain-gap artifacts — **no ground truth exists for this
+real-world pair, so no IoU/Dice/accuracy is or can be reported here.** Full method, results,
+resolution-gap analysis, and an honest discussion of what this does and does not demonstrate:
+[`docs/REAL_WORLD_DEMO.md`](docs/REAL_WORLD_DEMO.md). Do not read this section's qualitative
+result as equivalent in validity to the benchmark numbers in "Results" above.
+
 ## Limitations
 
 See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) (written progressively; finalized in Phase 12).

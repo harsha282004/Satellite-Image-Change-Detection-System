@@ -64,5 +64,8 @@ Thumbs.db
 # Local diagnostic artifacts (regenerable via scripts/check_env.py)
 outputs/env_freeze.txt
 
+# Real-world demo outputs (regenerable via scripts/real_world_demo.py, requires network access)
+outputs/real_world_demo/
+
 # Logs
 *.log
