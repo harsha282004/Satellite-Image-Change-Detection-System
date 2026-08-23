@@ -5,6 +5,104 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 12 — Final Integration & Documentation
+
+**Date:** 2026-08-23
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `docs/LIMITATIONS.md`: consolidated, honest limitations document drawing on every real finding
+  from Phases 2-11 (dataset scope/imbalance, mask-binarization caveat, undertrained models, no
+  hyperparameter search, single-seed/GPU-non-determinism, fixed 0.5 threshold, only one
+  Siamese+Attention combination trained, Transformer deliberately deferred, benchmark-only
+  evaluation scope, and — the largest, most consequential gap — the Sentinel-2 resolution/domain
+  gap with no real-world ground truth) — every item cites the specific doc/log entry it comes
+  from, not a generic disclaimer list.
+- `docs/TRAINING.md`: the training methodology document specified in the original project
+  structure but not yet written — consolidated from what Phases 4-8 actually built and ran:
+  pipeline description, the exact shared hyperparameter recipe and why each choice was made, and
+  the Phase 6 reproducibility finding restated with its full implications for anyone re-running
+  these commands.
+- `tests/test_edge_cases.py` (8 tests, portable/synthetic): before/after images with genuinely
+  different native dimensions from each other, explicit CPU-device inference, explicit GPU-device
+  inference with a CPU/GPU output-agreement check (skipped if no CUDA GPU — none needed on this
+  machine, since Phase 1 confirmed one), missing-file errors for both `load_image`/`load_mask`,
+  an invalid (non-image) file error, and `Predictor` raising clear errors for a missing config or
+  missing checkpoint path.
+- `scripts/verify_end_to_end.py`: full real pipeline (load → preprocess → predict → analyze →
+  visualize) run against the actual best trained checkpoint on 3 test images deliberately
+  different from every sample name used in any prior phase's documentation (`test_10`, `test_45`,
+  `test_80` vs. Phase 9's `test_1/29/52/75/99/121`), plus two real edge cases against real data:
+  mismatched before/after native dimensions and a missing-file error.
+- Final documentation consistency pass: found and fixed a stale "Phase 0 complete, no model
+  trained yet" status banner at the top of `README.md` (left over from the very first commit —
+  every subsequent phase had updated its own section but not that top-level banner), corrected
+  the Limitations section to point to the now-finalized `docs/LIMITATIONS.md` instead of "written
+  progressively", and added `docs/TRAINING.md`/`docs/REAL_WORLD_DEMO.md` to the README's project
+  structure listing.
+
+**FILES CREATED:**
+- `docs/LIMITATIONS.md`, `docs/TRAINING.md`
+- `tests/test_edge_cases.py`
+- `scripts/verify_end_to_end.py`
+- `outputs/visualizations/phase12_verification/*.png` (gitignored)
+
+**FILES MODIFIED:**
+- `README.md` (stale status banner fixed, Limitations/Training sections finalized, project
+  structure listing corrected)
+
+**COMMANDS EXECUTED:**
+- `pytest tests/ -v` (66 -> 74 tests)
+- `python scripts/verify_end_to_end.py`
+- Manual inspection of one genuinely-fresh test image's before/after/prediction (`test_45.png`)
+
+**TESTS:**
+- `pytest tests/`: 74/74 passed, including the real CPU/GPU agreement check (this machine has the
+  RTX 4050 GPU confirmed in Phase 1, so that test ran for real rather than being skipped) — CPU
+  and GPU forward passes on identical weights/input agreed on >95% of predicted pixels (small
+  disagreement expected and acceptable: different floating-point execution paths, not a bug).
+- `scripts/verify_end_to_end.py` against the real best checkpoint (Siamese+Attention) and 3
+  genuinely unseen test images: full pipeline succeeded on all 3 (mask shape/binarity asserted,
+  not just eyeballed), mismatched-native-dimensions case succeeded (1024x1024 vs. 400x700 input),
+  missing-file case correctly raised a clear `ValueError` rather than crashing or hanging.
+- Manually inspected `test_45.png`'s actual before/after images after noticing its predicted
+  26.14% changed-pixel figure was unusually high compared to every other example seen in this
+  project — confirmed it is a **genuine, dramatic real change** (forest/farmland fully converted
+  to a dense new subdivision covering nearly the entire tile), correctly detected at large scale,
+  not a false-positive failure. Included as a real finding rather than being silently discarded
+  for looking like an outlier.
+
+**RESULTS (actual, measured):**
+```
+scripts/verify_end_to_end.py: ALL CHECKS PASSED
+  test_10.png: 72 regions, 11.30% changed
+  test_45.png: 118 regions, 26.14% changed (verified: genuine large-scale real development)
+  test_80.png: 70 regions, 12.48% changed
+  Mismatched dimensions (1024x1024 vs 400x700): handled correctly
+  Missing file: raised clear ValueError, no crash
+
+pytest tests/: 74 passed, 0 failed, 5.86s
+  (includes a real GPU/CPU agreement test: >95% pixel agreement between devices)
+```
+
+**KNOWN ISSUES:**
+- This phase did not re-verify Phase 10's dashboard UI in the browser again (already verified for
+  real in Phase 10 with Playwright); no dashboard code changed since then, so re-verification was
+  judged unnecessary rather than skipped by oversight.
+- `docs/LIMITATIONS.md` and this log entry both explicitly flag that no systematic real-world or
+  multi-seed evaluation exists — these remain genuinely open items, listed as Future Scope in
+  `README.md`, not resolved by this phase.
+
+**NEXT PHASE:**
+- None remaining in the originally specified plan (Phases 0-12 complete). Any further work
+  (Future Scope items: additional datasets, a Transformer variant, formal hyperparameter search,
+  multi-seed variance estimates, multi-class change typing, a systematic real-world evaluation
+  with independently-labeled ground truth) would be a new, explicitly-scoped initiative building
+  on this now-complete, documented, and verified foundation — not an implicit continuation.
+
+---
+
 ## PHASE 11 — Real-World Satellite Demonstration
 
 **Date:** 2026-08-23

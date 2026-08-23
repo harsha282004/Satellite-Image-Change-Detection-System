@@ -2,9 +2,14 @@
 
 Deep Learning-Based Multi-Temporal Satellite Image Change Detection and Analysis System.
 
-> **Status: Phase 0 (Project Initialization) complete.** No model has been trained yet. Any
-> numbers that appear in this README are placeholders and are explicitly marked
-> `NOT YET MEASURED` until real experiments are run — see `DEVELOPMENT_RULES.md` (Rule 3).
+> **Status: Phases 0-12 complete.** Dataset acquired and verified, baseline and Siamese U-Net
+> (+ Attention) models trained and evaluated on a real held-out benchmark test set, 5 research
+> experiments compared, change-region quantification and a Streamlit dashboard built on the real
+> trained model, and a real-world Sentinel-2 demonstration run (explicitly distinguished from the
+> benchmark evaluation — see `docs/REAL_WORLD_DEMO.md`). Every number in this README is real,
+> measured output — see `DEVELOPMENT_LOG.md` for the full phase-by-phase history and
+> `docs/LIMITATIONS.md` for what this project does not do. Anything not yet measured is still
+> marked `NOT YET MEASURED` per `DEVELOPMENT_RULES.md` Rule 3, rather than estimated.
 
 ## Project Overview
 
@@ -103,7 +108,9 @@ python -m src.training.train --config configs/siamese.yaml    # Siamese (primary
 Trains for the epoch count in the config (`--epochs N` overrides it), logging per-epoch
 train/val loss and IoU/Dice/Precision/Recall/F1/Accuracy to
 `outputs/experiments/<experiment_name>/history.csv`, and saving `best.pt` (selected by validation
-IoU)/`last.pt` checkpoints to `outputs/checkpoints/<experiment_name>/`.
+IoU)/`last.pt` checkpoints to `outputs/checkpoints/<experiment_name>/`. Full methodology,
+hyperparameter rationale, and the real reproducibility caveats discovered while building this
+(GPU training is not bit-exact reproducible even with a fixed seed): [`docs/TRAINING.md`](docs/TRAINING.md).
 
 ## Evaluation
 
@@ -226,10 +233,13 @@ result as equivalent in validity to the benchmark numbers in "Results" above.
 
 ## Limitations
 
-See [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) (written progressively; finalized in Phase 12).
-Key categories to be documented: dataset limitations, registration error, resolution/sensor
-differences, cloud interference, seasonal/lighting change, false positives/negatives, class
-imbalance, domain shift, geographic generalization, benchmark-vs-real-world gap.
+**Finalized (Phase 12).** Full account in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): dataset
+scope (binary building-change only, single Texas region, class imbalance), model/training
+caveats (not trained to full convergence, no hyperparameter search, single-seed, GPU
+non-determinism), evaluation scope (benchmark-only metrics, documented false positives/negatives),
+and — the most consequential — the benchmark-vs-real-world domain gap (Sentinel-2 is 20x coarser
+resolution than the training data; no ground truth exists for real-world predictions). Every item
+traces to a specific finding from Phases 2-11, not a generic disclaimer.
 
 ## Future Scope
 
@@ -257,7 +267,7 @@ satellite-change-detection/
 ├── configs/             # config.yaml, baseline.yaml, siamese.yaml
 ├── outputs/             # checkpoints/, predictions/, visualizations/, metrics/, experiments/
 ├── tests/
-├── docs/                # ARCHITECTURE.md, DATASET.md, TRAINING.md, EVALUATION.md, EXPERIMENTS.md, LIMITATIONS.md
+├── docs/                # ARCHITECTURE.md, DATASET.md, TRAINING.md, EVALUATION.md, EXPERIMENTS.md, REAL_WORLD_DEMO.md, LIMITATIONS.md
 ├── PROJECT_CONTEXT.md
 ├── DEVELOPMENT_RULES.md
 ├── DEVELOPMENT_LOG.md
