@@ -1,0 +1,41 @@
+# Phase 14, loss experiment: identical to configs/siamese_attention_e100.yaml except the loss.
+# Isolates the effect of Tversky loss (alpha=0.3, beta=0.7 — recall-favoring default, Salehi et
+# al. 2017) vs. BCE+Dice, as a direct lever on the precision/recall tradeoff observed throughout
+# this project (docs/EVALUATION.md, docs/EXPERIMENTS.md).
+extends: config.yaml
+
+experiment_name: siamese_unet_diff_concat_attention_tversky
+
+model:
+  type: siamese_unet
+  base_channels: 32
+  comparison_mode: diff_concat
+  use_attention: true
+
+dataset:
+  root: data/raw/levir_cd
+  image_size: 256
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+
+training:
+  epochs: 100
+  learning_rate: 0.0001
+  optimizer: adam
+  weight_decay: 0.0
+  loss: tversky
+  loss_params:
+    alpha: 0.3
+    beta: 0.7
+  seed: 42
+  early_stopping:
+    enabled: true
+    monitor: val_iou
+    patience: 10
+  scheduler:
+    type: reduce_on_plateau
+    factor: 0.5
+    patience: 4
+    min_lr: 1.0e-6

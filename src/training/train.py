@@ -134,11 +134,12 @@ def main() -> int:
     print(f"Model: {config['model']['type']}, parameters: {n_params:,}")
 
     optimizer = build_optimizer(config, model)
-    loss_fn = get_loss(config["training"]["loss"])
+    loss_fn = get_loss(config["training"]["loss"], **config["training"].get("loss_params", {}))
     scheduler = build_scheduler(config, optimizer)
     early_stopping = config["training"].get("early_stopping", {"enabled": False})
     print(f"Optimizer: {config['training']['optimizer']}, lr={config['training']['learning_rate']}, "
           f"weight_decay={config['training'].get('weight_decay', 0.0)}")
+    print(f"Loss: {config['training']['loss']}, params={config['training'].get('loss_params', {})}")
     print(f"Scheduler: {config['training'].get('scheduler', 'none')}")
     print(f"Early stopping: {early_stopping}")
 

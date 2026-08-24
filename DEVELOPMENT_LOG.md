@@ -5,6 +5,128 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 14.1-14.2 — Loss Function Experiments
+
+**Date:** 2026-08-24
+
+**STATUS:** IN PROGRESS (14.1-14.2 complete; 14.3 hyperparameter experiments and 14.4 final
+configuration not started — reported separately once run, per the phase-by-phase execution rule)
+
+**IMPLEMENTED:**
+- `models/losses.py`: added `FocalLoss` (binary focal loss, Lin et al. 2017, configurable
+  `alpha`/`gamma`), `FocalDiceLoss` (Focal + Dice, mirrors `BCEDiceLoss`'s structure),
+  `WeightedBCEDiceLoss` (positive-class-weighted BCE + Dice, configurable `pos_weight`, documented
+  as a moderate choice — not the exact ~1:21 inverse class ratio — since very large pos_weight is
+  known to over-predict the positive class), `TverskyLoss` (configurable `alpha`/`beta`, default
+  0.3/0.7 — Salehi et al. 2017's recall-favoring default). All four registered in `get_loss()`.
+- `src/training/train.py`: `get_loss()` call now passes through `config["training"].get(
+  "loss_params", {})`, so loss hyperparameters are config-driven and recorded per experiment
+  (Rule 7/14); added a `Loss: ... params=...` startup print line for transparency.
+- `configs/siamese_attention_focal_dice.yaml`, `_weighted_bce_dice.yaml`, `_tversky.yaml`: each
+  identical to `configs/siamese_attention_e100.yaml` (Phase 13's scientifically justified best
+  training strategy — max 100 epochs, early stopping patience=10, `ReduceLROnPlateau`) except the
+  loss function and its parameters — isolates the loss as the only variable, per the "controlled
+  experiment" requirement. **The BCE+Dice entry in this comparison reuses Phase 13 Experiment C's
+  result rather than retraining it** — it is already the exact controlled measurement for
+  `loss=bce_dice` under this training strategy.
+- 11 new pytest tests (`tests/test_losses_phase14.py`): Focal loss correctness (near-zero for
+  confident-correct predictions, `alpha` weighting verified), Focal+Dice gradient flow, Weighted
+  BCE+Dice reduces to plain BCE+Dice at `pos_weight=1.0` and penalizes missed positives more at
+  higher `pos_weight`, Tversky reduces to Dice at `alpha=beta=0.5` **with `smooth=0`** (a real
+  discrepancy was caught and fixed here — see TESTS below), Tversky penalizes false negatives more
+  than false positives at its recall-favoring default, and `get_loss()` factory/kwargs-passthrough
+  checks for all three new losses.
+- Ran all 3 new loss experiments for real, evaluated all 4 loss variants (3 new + the reused
+  BCE+Dice) on the real held-out test set, generated training-curve plots for the 3 new
+  experiments, wrote `outputs/metrics/loss_experiment_comparison.csv`, and wrote up the full
+  comparison and interpretation in `docs/EXPERIMENTS.md` (new "Phase 14 — Loss Function
+  Experiments" section appended; also corrected a now-stale "best result overall" claim in the
+  Phase 8 status list to point to Phase 13's improved result instead).
+
+**FILES CREATED:**
+- `configs/siamese_attention_focal_dice.yaml`, `configs/siamese_attention_weighted_bce_dice.yaml`,
+  `configs/siamese_attention_tversky.yaml`
+- `tests/test_losses_phase14.py`
+- `outputs/checkpoints/siamese_unet_diff_concat_attention_{focal_dice,weighted_bce_dice,tversky}/
+  {best,last}.pt` (gitignored)
+- `outputs/experiments/siamese_unet_diff_concat_attention_{focal_dice,weighted_bce_dice,tversky}/
+  {history.csv,history.json}` (gitignored)
+- `outputs/metrics/siamese_unet_diff_concat_attention_{focal_dice,weighted_bce_dice,tversky}_test_metrics.json` (gitignored)
+- `outputs/metrics/loss_experiment_comparison.csv` (gitignored, consistent with existing
+  outputs/metrics policy — regenerable from the JSON/CSV sources it was compiled from)
+- `outputs/visualizations/siamese_unet_diff_concat_attention_{focal_dice,weighted_bce_dice,tversky}_{training_curves,test_predictions}.png` (gitignored)
+
+**FILES MODIFIED:**
+- `models/losses.py`, `src/training/train.py`, `docs/EXPERIMENTS.md`
+
+**EXPERIMENTS RUN (real, on the actual GPU/dataset):**
+1. Focal+Dice (`configs/siamese_attention_focal_dice.yaml`) — early-stopped at epoch 58/100, best
+   epoch 48.
+2. Weighted BCE+Dice (`configs/siamese_attention_weighted_bce_dice.yaml`) — early-stopped at
+   epoch 63/100, best epoch 53.
+3. Tversky (`configs/siamese_attention_tversky.yaml`) — early-stopped at epoch 49/100, best
+   epoch 39.
+4. All 3 evaluated on the real 128-image held-out test split via `src/evaluation/evaluate.py`
+   using each experiment's own `best.pt` (selected by validation IoU, never the test set).
+   BCE+Dice's test metrics reused unmodified from Phase 13 Experiment C.
+
+**RESULTS (actual, measured — full data: `outputs/metrics/loss_experiment_comparison.csv`,
+interpretation: `docs/EXPERIMENTS.md` "Phase 14" section):**
+```
+Loss                Best ep.  Val IoU   Test IoU  Test Precision  Test Recall
+BCE+Dice (reused)   68        0.7188    0.7123    0.8402          0.8239
+Focal+Dice          48        0.6758    0.6646    0.7803          0.8176
+Weighted BCE+Dice   53        0.6579    0.6539    0.7199          0.8770
+Tversky             39        0.6376    0.6322    0.6941          0.8764
+```
+**BCE+Dice won clearly and consistently** — +0.0477 test IoU over the next-best alternative
+(Focal+Dice), same ranking on every metric except recall. Weighted BCE+Dice and Tversky (both
+recall-favoring by design) show exactly the expected precision/recall shift (Tversky: highest
+recall of all 4 at 0.8764, but lowest precision at 0.6941 and lowest IoU at 0.6322) — the loss
+mechanisms are working as designed, they just weren't the right fix for this task: none of the
+three alternatives needed more training time either (all early-stopped well before BCE+Dice's 78
+epochs), suggesting a worse optimum found faster, not a slower path to the same place.
+**Conclusion: BCE+Dice remains the loss function for this project's best model — no change
+adopted.**
+
+**TESTS:**
+- `pytest tests/`: 97/97 passed (86 from Phase 13 + 11 new).
+- **A real correctness issue was caught and fixed during test-writing, not shipped silently:** the
+  first draft of `test_tversky_loss_equals_dice_when_alpha_beta_half` asserted `TverskyLoss(alpha=
+  0.5, beta=0.5, smooth=1.0)` exactly equals `DiceLoss(smooth=1.0)` and failed (0.5008 vs. 0.5087).
+  Root cause: the two losses' smoothing conventions are both individually standard/correct but
+  algebraically different when `smooth≠0` (Tversky smooths `TP` and the denominator by `smooth`;
+  this project's `DiceLoss` smooths `2*TP` and the denominator by `smooth`) — they only coincide
+  exactly at `smooth=0`. Not a bug in `TverskyLoss` (it correctly implements the standard Tversky
+  formula); the test's assumption was wrong and was corrected, with the reasoning documented
+  inline in the test.
+
+**DOCUMENTATION UPDATED:**
+- `docs/EXPERIMENTS.md` — new Phase 14 loss-comparison section (table, interpretation, training
+  curves, status); corrected a stale "best result overall" claim in the existing Phase 8 status
+  list.
+- `DEVELOPMENT_LOG.md` — this entry.
+- `README.md` not yet updated for Phase 14 (no leaderboard change — BCE+Dice, already the best
+  model's loss, was confirmed as the best loss, not replaced).
+
+**KNOWN LIMITATIONS:**
+- Each alternative loss was tested with one parameter setting each (`pos_weight=5.0`,
+  `alpha=0.3/beta=0.7`, `focal_alpha=0.8/focal_gamma=2.0`) — not a parameter sweep. A different
+  `pos_weight` or Tversky `alpha`/`beta` could plausibly change the result; this experiment shows
+  these *specific, documented, literature-reasonable defaults* underperform BCE+Dice, not that no
+  parameterization of these loss families could ever match it.
+- Single seed (42) for all 4 — same caveat as every other experiment in this project.
+- Loss experiments used the same architecture as Phase 13 (Siamese+Attention, `diff_concat`) only
+  — untested whether a different loss might help a different architecture more.
+
+**NEXT PHASE:**
+- PHASE 14.3-14.4 — Hyperparameter Experiments & Final Configuration: controlled learning-rate
+  (5e-5, 2e-4), weight-decay, and batch-size experiments (validation-selected, never the test
+  set), then identify and document the single best overall training configuration. Not started
+  without explicit user go-ahead, per this project's phase-by-phase execution rule.
+
+---
+
 ## PHASE 13 — Advanced Training Strategy
 
 **Date:** 2026-08-24
