@@ -79,6 +79,35 @@ item below traces to a real, documented finding elsewhere in this repository, ci
   independent re-registration or alignment-quality check was performed for the Sentinel-2 imagery
   used in Phase 11 beyond Sentinel-2's own standard georeferencing.
 
+## Multi-class change detection (Phase 19) — not implemented, dataset unobtainable, not a design choice
+Phase 19 required a *properly labeled* multi-class change detection dataset (LEVIR-CD's binary
+labels were never going to be misused to fabricate classes — see `PROJECT_CONTEXT.md`/
+`DEVELOPMENT_RULES.md`). Three real candidate datasets were investigated on 2026-08-25:
+
+| Dataset | What it offers | Why it could not be used here |
+|---|---|---|
+| SECOND (captain-whu, 4662 pairs, 512x512, 6 land-cover classes) | Exactly the right shape: small, patch-based, genuinely multi-class | Only distributed via Google Drive — no direct/resumable HTTP source; not reliably fetchable headless |
+| HRSCD-Clean (`EPFL-ECEO/HRSCD_clean` on Hugging Face) | Real semantic segmentation masks alongside change masks, MIT-licensed | Distributed as a **single 60.25 GB zip** (confirmed via the Hub API's `files_metadata`) with no per-sample sharding |
+| xView2/xBD (building damage, 4 severity classes — genuinely multi-class and arguably the best conceptual fit) | Real, widely-used, 4-class damage severity labels | Smallest mirror found (`Devansh25/xview2`) is still 3.85 GB; larger mirrors run 11-33 GB |
+
+**The blocking constraint is this session's measured network throughput, not dataset scarcity.**
+A direct, repeated HTTP range-request benchmark against Hugging Face's own CDN (not a slow mirror)
+measured **~18.3 KB/s** — consistent with the ~10-22 KB/s observed installing `pyproj`/`pyogrio` in
+Phase 18 (`DEVELOPMENT_LOG.md` Phase 18 "Known limitations"). At that rate the smallest viable
+candidate (3.85 GB) would take **~2.4 days**; HRSCD-Clean's 60 GB zip would take **~38 days**. This
+is not fixable by choosing a different dataset — any dataset of the size multi-class semantic
+change detection genuinely requires (hundreds of MB to tens of GB of paired high-resolution
+imagery + per-pixel semantic masks) hits the same wall.
+
+**Decision (per the explicit autonomous-execution rule to document a genuine limitation and
+continue rather than invent a solution):** Phase 19 is not implemented. LEVIR-CD's binary building-
+change labels are not repurposed to fake multi-class output. The existing binary Siamese U-Net +
+Attention model (`docs/EVALUATION.md`, `README.md` Results) is unaffected and remains this
+project's primary result. If network conditions improve in a future session, `Devansh25/xview2`
+(3.85 GB, real 4-class building-damage-severity labels) is the recommended first candidate to
+revisit, since its class scheme (no damage/minor/major/destroyed) is a more natural fit for a
+change-detection-derived pipeline than land-cover classes borrowed from a scene-segmentation task.
+
 ## Not implemented (explicitly, per Rule 4 — never implied as working)
 - Cloud/shadow detection or masking.
 - Automated image co-registration/alignment quality checking.

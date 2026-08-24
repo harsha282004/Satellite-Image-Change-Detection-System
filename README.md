@@ -307,10 +307,13 @@ traces to a specific finding from Phases 2-11, not a generic disclaimer.
 
 ## Future Scope
 
-Additional datasets (WHU-CD, DSIFN-CD), a Transformer-based variant (deferred in Phase 8 —
-justification in `docs/EXPERIMENTS.md`: small dataset, no evidence of a CNN failure mode it would
-fix), formal hyperparameter search, multi-seed variance estimates, multi-class change typing (only
-if a suitable labeled dataset is identified).
+Additional datasets (WHU-CD, DSIFN-CD), formal hyperparameter search, multi-seed variance
+estimates. **Multi-class change typing (Phase 19) was investigated, not skipped:** three real
+candidate datasets (SECOND, HRSCD-Clean, xView2/xBD) were evaluated and none was reliably
+obtainable at this session's measured ~18 KB/s network throughput (smallest viable candidate,
+`Devansh25/xview2` at 3.85 GB, would take ~2.4 days; full details and the recommended first
+candidate for a future session in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)) — LEVIR-CD's binary
+labels were never repurposed to fake it.
 
 ## Project Structure
 

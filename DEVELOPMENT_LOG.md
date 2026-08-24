@@ -11,6 +11,59 @@ only the "wait for the user between phases" behavior changed.
 
 ---
 
+## PHASE 19 — Multi-Class Change Detection
+
+**Date:** 2026-08-25
+
+**STATUS:** LIMITATION DOCUMENTED, NOT IMPLEMENTED (dataset genuinely unobtainable this session —
+not skipped, not faked; per the standing autonomous-execution rule to document a real limitation
+and continue rather than invent a workaround)
+
+**INVESTIGATED:**
+Per the explicit instruction to first inspect/select a suitable *properly labeled* multi-class
+dataset rather than misusing LEVIR-CD's binary labels, three real candidates were evaluated:
+1. **SECOND** (captain-whu, 4662 pairs, 512x512, 6 land-cover classes — the best-shaped candidate
+   for this project's pipeline) — only distributed via Google Drive links on the official project
+   page; no direct/resumable HTTP source suitable for headless, reliable fetch.
+2. **HRSCD-Clean** (`EPFL-ECEO/HRSCD_clean` on Hugging Face — real semantic segmentation masks,
+   MIT-licensed) — confirmed via `HfApi.dataset_info(..., files_metadata=True)` to be a single
+   **60.25 GB zip**, no per-sample sharding.
+3. **xView2/xBD** (genuine 4-class building-damage-severity labels — no damage/minor/major/
+   destroyed; arguably the best conceptual fit, since the classes describe *change*, not land
+   cover) — smallest Hugging Face mirror found (`Devansh25/xview2`) is 3.85 GB; other mirrors run
+   11-33 GB.
+
+**Root-caused the blocker, not just asserted it:** measured actual throughput with a direct HTTP
+range-request benchmark against Hugging Face's own CDN (`cas-bridge.xethub.hf.co`, not a slow
+mirror) — a 5 MB range request took 280.33s, i.e. **~18.3 KB/s**. This matches the ~10-22 KB/s
+observed installing `pyproj`/`pyogrio` in Phase 18, confirming this is this session's genuine
+network condition, not a dataset-specific or PyPI-specific slowdown. At ~18 KB/s: the smallest
+candidate (3.85 GB) would take ~2.4 days; HRSCD-Clean's 60 GB would take ~38 days. No differently-
+chosen dataset would avoid this — multi-class semantic/damage change detection inherently requires
+paired high-resolution imagery plus per-pixel labels, which does not exist in a sub-100MB form.
+
+**DECISION:** Phase 19 is not implemented this session. LEVIR-CD's binary labels are not
+repurposed to fabricate multi-class output (would violate the never-fabricate rule). The existing
+binary Siamese U-Net + Attention model and all Phase 1-18 work are completely unaffected and
+untouched. Full investigation, the size/throughput table, and the recommended first candidate to
+revisit if network conditions improve in a future session (`Devansh25/xview2`) are documented in
+`docs/LIMITATIONS.md`.
+
+**FILES MODIFIED:**
+- `docs/LIMITATIONS.md` (new "Multi-class change detection (Phase 19)" section), `README.md`
+  (Future Scope section)
+
+**FILES CREATED:** None (no code was written for a dataset that could not be obtained).
+
+**TESTS:** `pytest tests/`: 152/152 still passing (unchanged from Phase 18 — no code touched).
+
+**NEXT PHASE:**
+- PHASE 20 — Transformer-Based Architecture (Research Comparison). Proceeding automatically per
+  the standing autonomous authorization. Uses only the existing LEVIR-CD data already on disk, so
+  is unaffected by this phase's network-availability finding.
+
+---
+
 ## PHASE 18 — Geospatial Change Intelligence
 
 **Date:** 2026-08-25
