@@ -336,5 +336,65 @@ properly labeled multi-class model (Phase 19), if one is ever added.
 | Region-ID overlay visualization | **Implemented, measured** |
 | Dashboard region table + region-ID overlay | **Implemented** |
 | `outputs/regions/` CSV/JSON export | **Implemented, measured** (5 real images, 258 regions) |
-| Region severity scoring | **Not implemented yet** — Phase 17 |
+| Region severity scoring | **Implemented, measured** — see Phase 17 below |
 | Semantic region classification (Building/Road/etc.) | **Not implemented, and not planned** without a properly labeled multi-class dataset (Phase 19) |
+
+---
+
+## Phase 17 — Change Severity Analysis
+
+**This section's most important sentence, stated once here and repeated everywhere the score
+appears (code docstring, dashboard, this doc): severity is an analytical score computed entirely
+from measurable model outputs. It is NOT ground truth, NOT a physical/environmental damage
+assessment, and has not been validated against any labeled severity data — none exists for this
+task.** It exists to help rank/triage the regions a model already detected, nothing more.
+
+### Formula (fully documented, every constant named — `src/analysis/severity.py`)
+
+```
+severity_score = 100 * (
+    0.35 * min(1, region.pixel_count / 500)              # area_score, capped
+  + 0.30 * region.mean_prediction_probability             # probability_score
+  + 0.15 * region.change_density                          # density_score
+  + 0.20 * (region.pixel_count / total_changed_pixels_in_image)  # relative_size_score
+)
+```
+
+Weights (0.35/0.30/0.15/0.20, sum to 1.0) and the area reference (500px ≈ 2000 m² at this
+project's ~2 m/pixel effective resolution) are documented, adjustable defaults — not derived from
+any ground-truth severity study, since none exists. Categories: Low [0,25), Moderate [25,50),
+High [50,75), Very High [75,100] — also configurable.
+
+### Real, measured result
+
+Ran on the same 5 test images as Phase 16's region export (`scripts/export_regions.py`, now
+severity-scored): 258 regions total.
+
+| Category | Region count | Changed pixels |
+|---|---|---|
+| Low | 3 | — |
+| Moderate | 215 | — |
+| High | 40 | — |
+| Very High | 0 | — |
+
+Severity score range: 22.3-69.9 (mean 44.3). **No region reached "Very High"** on this sample —
+consistent with the formula's design (a region needs to be simultaneously large, high-probability,
+dense, *and* a large share of its image's total change to approach 100) and with these being
+individual building-change detections rather than image-dominating events. This is a real,
+unforced result, not tuned to produce a particular-looking distribution.
+
+### Dashboard integration
+`dashboard/app.py` "Region Analysis" section: the region table gained "Severity Score"/"Severity
+Category" columns; new "Severity Distribution" subsection shows region-count-by-category metrics
+and a "Top 5 highest-severity regions" table — with the NOT-ground-truth disclaimer repeated
+directly above it, not just in this document.
+
+### Phase 17 status summary
+
+| Item | Status |
+|---|---|
+| Transparent, configurable severity formula | **Implemented, measured** |
+| Per-region severity score + category | **Implemented, measured** (258 real regions) |
+| Severity distribution / highest-severity ranking | **Implemented, measured** |
+| Dashboard severity display with repeated disclaimer | **Implemented** |
+| Severity validated against real damage/impact data | **Not implemented, and not possible** — no such ground truth exists for this task |

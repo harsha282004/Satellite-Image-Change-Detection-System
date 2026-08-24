@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np
 
 from src.analysis.area import levir_cd_effective_pixel_size
+from src.analysis.severity import compute_severity_for_regions
 from src.analysis.statistics import compute_change_statistics
 from src.data.dataset import LEVIRCDDataset
 from src.inference.predict import Predictor
@@ -49,6 +50,8 @@ def region_row_for_csv(image_name: str, region: dict, pixel_size_m: float) -> di
         "area_m2": round(region["pixel_count"] * pixel_size_m ** 2, 1),
         "mean_prediction_probability": round(region.get("mean_prediction_probability", float("nan")), 4),
         "max_prediction_probability": round(region.get("max_prediction_probability", float("nan")), 4),
+        "severity_score": round(region.get("severity_score", float("nan")), 2),
+        "severity_category": region.get("severity_category", ""),
     }
     return row
 
@@ -80,6 +83,7 @@ def main() -> int:
             mask, probability_map=prob_map, pixel_size_meters=pixel_size_m,
             min_region_pixels=args.min_region_pixels,
         )
+        stats["regions"] = compute_severity_for_regions(stats["regions"])
 
         for region in stats["regions"]:
             all_rows.append(region_row_for_csv(name, region, pixel_size_m))

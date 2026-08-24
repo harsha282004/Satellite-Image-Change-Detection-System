@@ -19,6 +19,7 @@ from PIL import Image, UnidentifiedImageError
 
 from src.analysis.area import levir_cd_effective_pixel_size
 from src.analysis.statistics import compute_change_statistics
+from src.analysis.severity import compute_severity_for_regions, highest_severity_regions, severity_distribution
 from src.inference.predict import Predictor
 from src.visualization.overlays import create_overlay, create_region_id_overlay
 
@@ -253,6 +254,8 @@ if before_file and after_file:
                 "regions as e.g. \"Building\" or \"Road\" (see docs/DATASET.md)."
             )
             if stats["regions"]:
+                scored_regions = compute_severity_for_regions(stats["regions"])
+
                 region_id_overlay = create_region_id_overlay(after_resized, stats["regions"])
                 st.image(region_id_overlay, caption="Regions labeled by ID (matches table below)", width=500)
 
@@ -268,15 +271,42 @@ if before_file and after_file:
                                 "Bounding Box (row, col)": f"({r['bbox']['min_row']}-{r['bbox']['max_row']}, "
                                                             f"{r['bbox']['min_col']}-{r['bbox']['max_col']})",
                                 "Width x Height (px)": f"{r['width']} x {r['height']}",
+                                "Severity Score": round(r["severity_score"], 1),
+                                "Severity Category": r["severity_category"],
                             }
-                            for r in stats["regions"]
+                            for r in scored_regions
                         ],
                         width="stretch",
                     )
+
+                st.subheader("Severity Distribution")
                 st.caption(
-                    "Severity scoring is not yet implemented — see docs/LIMITATIONS.md and the "
-                    "project roadmap for Phase 17."
+                    "**Severity is an analytical score derived from measurable model outputs "
+                    "(region size, the model's own prediction probability, region density/shape, "
+                    "and relative size within this image) — it is NOT ground truth, NOT a "
+                    "physical damage assessment, and has not been validated against any labeled "
+                    "severity data.** Formula and full disclaimer: `src/analysis/severity.py`, "
+                    "docs/EVALUATION.md Phase 17."
                 )
+                dist = severity_distribution(scored_regions)
+                dist_cols = st.columns(4)
+                for i, cat in enumerate(["Low", "Moderate", "High", "Very High"]):
+                    dist_cols[i].metric(
+                        cat,
+                        dist["region_count_by_category"].get(cat, 0),
+                        help=f"{dist['changed_pixels_by_category'].get(cat, 0)} changed pixels in this category",
+                    )
+
+                top_regions = highest_severity_regions(scored_regions, n=5)
+                with st.expander(f"Top {len(top_regions)} highest-severity regions"):
+                    st.dataframe(
+                        [
+                            {"Region": r["id"], "Severity Score": round(r["severity_score"], 1),
+                             "Category": r["severity_category"], "Area (px)": r["pixel_count"]}
+                            for r in top_regions
+                        ],
+                        width="stretch",
+                    )
             else:
                 st.write("No changed regions detected above the minimum region size.")
 else:
@@ -295,7 +325,7 @@ st.markdown(
 | Prediction probability visualization | **Implemented** — raw sigmoid output, not calibrated confidence |
 | Threshold optimization (validation-set sweep) | **Implemented** — see `docs/EVALUATION.md` Phase 15.2 |
 | Region-level intelligence (geometry, prediction probability per region, region-ID overlay) | **Implemented** — see `docs/EVALUATION.md` Phase 16 |
-| Region severity scoring | **Not implemented yet** — planned Phase 17 |
+| Region severity scoring | **Implemented** — analytical score only, NOT ground truth (see `src/analysis/severity.py`, docs/EVALUATION.md Phase 17) |
 | Change-type classification (road/vegetation/water/etc.) | **Not implemented** — no such labels in training data |
 | Verified real-world (non-LEVIR-CD) imagery support | **Experimental / not verified** — see `docs/LIMITATIONS.md` and Phase 11 |
 | Cloud/shadow/registration-error detection | **Not implemented** |

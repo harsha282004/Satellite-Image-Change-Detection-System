@@ -3,6 +3,87 @@
 Running log of phase completions. Newest entry at the top. See `PROJECT_CONTEXT.md` for phase
 definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry must satisfy.
 
+**Note on Phases 17-23:** run autonomously per explicit user authorization ("CONTINUE
+AUTONOMOUSLY — DO NOT WAIT FOR MY CONFIRMATION", given after Phase 16) — no per-phase pause for
+confirmation from this point forward, per that instruction. Every rule in `DEVELOPMENT_RULES.md`
+(no fabricated metrics, no test-set leakage, preserve prior results, etc.) still applies in full;
+only the "wait for the user between phases" behavior changed.
+
+---
+
+## PHASE 17 — Change Severity Analysis
+
+**Date:** 2026-08-25
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/analysis/severity.py`: `compute_region_severity()` — a fully documented, weighted-sum
+  formula (`severity_score = 100 * (0.35*area_score + 0.30*probability_score + 0.15*density_score
+  + 0.20*relative_size_score)`, 0-100) built entirely from measurable Phase 16 region fields plus
+  Phase 15's prediction probability; `severity_category()` (Low/Moderate/High/Very High,
+  configurable thresholds); `compute_severity_for_regions()` (batch, non-mutating);
+  `severity_distribution()` and `highest_severity_regions()` for the aggregate/ranking views.
+  Every weight and constant (weights, area reference=500px, category thresholds) is named and
+  documented as a chosen default, not derived from any labeled severity ground truth — none
+  exists for this task, stated explicitly in the module docstring and repeated in the dashboard.
+- `dashboard/app.py`: region table gained "Severity Score"/"Severity Category" columns; new
+  "Severity Distribution" subsection (region-count-by-category metrics + top-5 highest-severity
+  table), with the NOT-ground-truth disclaimer placed directly above it, not only in docs.
+- `scripts/export_regions.py`: now scores every exported region with `compute_severity_for_regions`
+  before writing CSV/JSON — re-run for real, `outputs/regions/regions.csv` gained
+  `severity_score`/`severity_category` columns.
+- 12 new pytest tests (`tests/test_severity.py`): category boundary correctness (both default and
+  custom thresholds), score range validity, maximal/minimal-input edge cases, monotonicity
+  (larger region → higher score, all else equal), area-score capping beyond the reference size,
+  custom-weight re-ranking (proves the formula actually uses the weights, not hard-coded), non-
+  mutation, distribution/ranking helper correctness.
+- `docs/EVALUATION.md`: new "Phase 17" section (formula, real measured distribution, dashboard
+  integration, status summary).
+
+**FILES CREATED:**
+- `src/analysis/severity.py`, `tests/test_severity.py`
+
+**FILES MODIFIED:**
+- `dashboard/app.py`, `scripts/export_regions.py`, `docs/EVALUATION.md`, `README.md`
+
+**EXPERIMENTS RUN (real, on the actual best model's already-detected regions):**
+1. `scripts/export_regions.py` re-run on the same 5 real test images as Phase 16, now with
+   severity scores for all 258 regions.
+2. Real end-to-end dashboard verification via Playwright (fresh server restart first): uploaded a
+   real test image pair, confirmed "Severity Distribution" renders with no console/page errors.
+
+**RESULTS (actual, measured — full data: `outputs/regions/regions.csv`):**
+```
+258 regions total, severity score range 22.3-69.9, mean 44.3
+  Low:       3 regions
+  Moderate: 215 regions
+  High:      40 regions
+  Very High:  0 regions
+```
+No region reached "Very High" on this real sample — an honest, unforced result consistent with
+the formula's design (a region must be simultaneously large, high-probability, dense, AND a large
+share of its image's total change to approach 100), not tuned to produce a particular distribution.
+
+**TESTS:**
+- `pytest tests/`: 141/141 passed (129 from Phase 16 + 12 new).
+
+**DOCUMENTATION UPDATED:**
+- `docs/EVALUATION.md` — new Phase 17 section.
+- `README.md` — Inference & Change Analysis section extended with the real severity distribution.
+- `DEVELOPMENT_LOG.md` — this entry, plus the autonomous-execution note above.
+
+**KNOWN LIMITATIONS:**
+- Severity has no ground-truth validation of any kind — repeated deliberately at every mention,
+  since this is the single most important caveat about this feature.
+- Weights/area-reference/category-thresholds are documented engineering defaults, not the result
+  of any optimization or labeled-data-driven calibration.
+- Scored only the same 5-image sample used in Phase 16, not the full test set.
+
+**NEXT PHASE:**
+- PHASE 18 — Geospatial Change Intelligence. Proceeding automatically per the standing autonomous
+  authorization.
+
 ---
 
 ## PHASE 16 — Region-Level Change Intelligence

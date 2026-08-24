@@ -149,7 +149,12 @@ aspect ratio, change density) plus mean/max prediction probability, and aggregat
 in m²/hectares only when a pixel size is explicitly provided, never assumed (LEVIR-CD's documented
 0.5 m/pixel, adjusted for the model's resized input resolution: see
 `src/analysis/area.py::levir_cd_effective_pixel_size`). `scripts/export_regions.py` saves real
-per-region CSV/JSON data and region-ID-labeled overlays to `outputs/regions/`.
+per-region CSV/JSON data (now including severity, see below) and region-ID-labeled overlays to
+`outputs/regions/`. **Severity (Phase 17):** `src/analysis/severity.py` computes a transparent,
+fully documented 0-100 score per region from measurable model outputs (region size, mean
+prediction probability, shape density, relative size) — **explicitly an analytical score, not
+ground truth or a physical damage assessment**; real measured result on 258 detected regions:
+3 Low / 215 Moderate / 40 High / 0 Very High.
 
 ```bash
 python scripts/analyze_predictions.py --config configs/siamese_attention_e100.yaml \
