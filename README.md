@@ -99,18 +99,22 @@ The `requirements.txt` install alone pulls the CPU build of PyTorch; see the not
 ## Training
 
 Baseline U-Net (Phase 4) and Siamese U-Net (Phase 5, primary architecture): **both implemented.**
+Since Phase 13, training also supports optional early stopping and an LR scheduler:
 
 ```bash
-python -m src.training.train --config configs/baseline.yaml   # baseline
-python -m src.training.train --config configs/siamese.yaml    # Siamese (primary)
+python -m src.training.train --config configs/baseline.yaml            # baseline, fixed 30 epochs
+python -m src.training.train --config configs/siamese.yaml             # Siamese (primary), fixed 30 epochs
+python -m src.training.train --config configs/siamese_attention_e100.yaml  # best model: up to 100 epochs, early stopping + LR scheduler
 ```
 
-Trains for the epoch count in the config (`--epochs N` overrides it), logging per-epoch
-train/val loss and IoU/Dice/Precision/Recall/F1/Accuracy to
+Trains for the epoch count in the config (`--epochs N` overrides it; with early stopping enabled,
+this is a *maximum* budget, not a guarantee — training can stop sooner), logging per-epoch
+train/val loss, IoU/Dice/Precision/Recall/F1/Accuracy, and current learning rate to
 `outputs/experiments/<experiment_name>/history.csv`, and saving `best.pt` (selected by validation
-IoU)/`last.pt` checkpoints to `outputs/checkpoints/<experiment_name>/`. Full methodology,
-hyperparameter rationale, and the real reproducibility caveats discovered while building this
-(GPU training is not bit-exact reproducible even with a fixed seed): [`docs/TRAINING.md`](docs/TRAINING.md).
+IoU, never the test set)/`last.pt` checkpoints to `outputs/checkpoints/<experiment_name>/`. Full
+methodology, hyperparameter rationale, the Phase 13 early-stopping/LR-scheduler experiments, and
+the real reproducibility caveats discovered while building this (GPU training is not bit-exact
+reproducible even with a fixed seed): [`docs/TRAINING.md`](docs/TRAINING.md).
 
 ## Evaluation
 
@@ -138,11 +142,11 @@ m²/hectares (LEVIR-CD's documented 0.5 m/pixel, adjusted for the model's resize
 see `src/analysis/area.py::levir_cd_effective_pixel_size`).
 
 ```bash
-python scripts/analyze_predictions.py --config configs/siamese_attention.yaml \
-    --checkpoint outputs/checkpoints/siamese_unet_diff_concat_attention/best.pt
+python scripts/analyze_predictions.py --config configs/siamese_attention_e100.yaml \
+    --checkpoint outputs/checkpoints/siamese_unet_diff_concat_attention_e100/best.pt
 ```
 
-Runs the current best model on real test images, saves a region-count/area report
+Runs the current best model (Phase 13 Experiment C — see Results) on real test images, saves a region-count/area report
 (`outputs/metrics/region_analysis_demo.json`) and per-sample visualizations with region bounding
 boxes (`outputs/visualizations/region_analysis/`). Real example measured output: a dense-
 subdivision test tile yielded 54 detected regions, ~15% of the tile changed, 3.92 hectares total
@@ -195,13 +199,34 @@ is not perfectly bit-reproducible even with a fixed seed — see `DEVELOPMENT_LO
 **Phase 8 research experiments found an even better model.** Adding Attention-U-Net-style
 skip-connection gates to the `diff_concat` Siamese architecture improved *every* metric (not just
 a tradeoff): **test IoU=0.6560, Dice=0.7922, Precision=0.8018, Recall=0.7829, Accuracy=0.9791** —
-the best result across all 5 experiments run to date (baseline, 3 Siamese comparison-mode
-variants, and this attention variant). A genuinely interesting ablation finding: the `diff`-only
-comparison mode alone (IoU=0.5569) actually *underperforms* the simple baseline — raw before/after
-feature context turns out to matter more than an explicit difference signal. Full results,
-interpretation, and the documented reasoning for deferring a Transformer variant and a formal
-hyperparameter search (dataset size, no evidence of a CNN failure mode, scope) are in
-[`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md).
+the best result across all 5 architectures compared under an identical, controlled 30-epoch
+training budget (baseline, 3 Siamese comparison-mode variants, and this attention variant). A
+genuinely interesting ablation finding: the `diff`-only comparison mode alone (IoU=0.5569) actually
+*underperforms* the simple baseline — raw before/after feature context turns out to matter more
+than an explicit difference signal. Full results, interpretation, and the documented reasoning for
+deferring a Transformer variant and a formal hyperparameter search (dataset size, no evidence of a
+CNN failure mode, scope) are in [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md).
+
+**Phase 13 found the winning architecture from Phase 8 was itself undertrained.** The 30-epoch
+budget used for the controlled architecture comparison above was deliberately equal across all 5
+models — but that same equal budget turned out to be too short for the winner. Adding early
+stopping (patience=10 on validation IoU) and a `ReduceLROnPlateau` LR scheduler and giving the
+Siamese+Attention architecture a larger epoch ceiling, tested experimentally rather than assumed,
+produced a real, substantial improvement:
+
+| Experiment | Max epochs | Actual epochs | Best epoch | Early stopped | Test IoU | Test Dice | Test F1 |
+|---|---|---|---|---|---|---|---|
+| A — original (Phase 8) | 30 | 30 | 26 | No (fixed budget) | 0.6560 | 0.7922 | 0.7922 |
+| B — longer training | 60 | 60 | 60 | No (still improving) | 0.7031 | 0.8257 | 0.8257 |
+| **C — longer + early stop** | 100 | 78 | 68 | **Yes** (patience=10) | **0.7123** | **0.8320** | **0.8320** |
+
+**`siamese_unet_diff_concat_attention_e100` (Experiment C) is now the best model in this project**,
+test IoU=0.7123 — a +0.0563 absolute IoU improvement over the Phase 8 result, from training
+strategy alone (identical architecture, data, optimizer, and seed as Experiment A). Full
+methodology, the LR-scheduler-triggered improvement bursts visible in the training curves, and
+honest limitations (this is one seed, and Experiment B — the uncapped-budget run — was still
+improving when its 60-epoch ceiling was hit, so an even longer budget might do better still, untested)
+are in [`docs/TRAINING.md`](docs/TRAINING.md) and `DEVELOPMENT_LOG.md` (Phase 13).
 
 ## Experiments
 

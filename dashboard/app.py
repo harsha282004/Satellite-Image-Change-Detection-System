@@ -25,9 +25,21 @@ from src.visualization.overlays import create_overlay
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # (display name -> (config path, checkpoint path, experiment_name)). Every entry here is a model
-# that was actually trained and evaluated — see docs/EXPERIMENTS.md for the real comparison.
+# that was actually trained and evaluated — see docs/EXPERIMENTS.md for the Phase 8 architecture
+# comparison (equal 30-epoch budget for all 5) and docs/TRAINING.md / DEVELOPMENT_LOG.md Phase 13
+# for the training-strategy experiments (A/B/C below, same architecture, different epoch budgets).
 MODEL_OPTIONS = {
-    "Siamese U-Net + Attention (best, Phase 8)": (
+    "Siamese U-Net + Attention (best overall, Phase 13 Exp. C)": (
+        "configs/siamese_attention_e100.yaml",
+        "outputs/checkpoints/siamese_unet_diff_concat_attention_e100/best.pt",
+        "siamese_unet_diff_concat_attention_e100",
+    ),
+    "Siamese U-Net + Attention (Phase 13 Exp. B, max 60 epochs)": (
+        "configs/siamese_attention_e60.yaml",
+        "outputs/checkpoints/siamese_unet_diff_concat_attention_e60/best.pt",
+        "siamese_unet_diff_concat_attention_e60",
+    ),
+    "Siamese U-Net + Attention (Phase 8 architecture comparison, 30 epochs)": (
         "configs/siamese_attention.yaml",
         "outputs/checkpoints/siamese_unet_diff_concat_attention/best.pt",
         "siamese_unet_diff_concat_attention",

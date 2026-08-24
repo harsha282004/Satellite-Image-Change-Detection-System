@@ -22,8 +22,10 @@ def plot_training_curves(experiment_name: str, out_path: Path = None) -> Path:
 
     rows = load_history(experiment_name)
     epochs = [r["epoch"] for r in rows]
+    has_lr = bool(rows) and "lr" in rows[0]  # Phase 13+ experiments log lr; pre-Phase-13 ones don't
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 9))
+    n_rows = 3 if has_lr else 2
+    fig, axes = plt.subplots(n_rows, 2, figsize=(12, 4.5 * n_rows))
     fig.suptitle(f"Training curves: {experiment_name}")
 
     ax = axes[0, 0]
@@ -47,6 +49,13 @@ def plot_training_curves(experiment_name: str, out_path: Path = None) -> Path:
     ax.plot(epochs, [r["val_f1"] for r in rows], label="val_f1")
     ax.set_xlabel("Epoch"); ax.set_ylabel("Score"); ax.set_title("Validation Precision/Recall/F1")
     ax.legend(); ax.grid(alpha=0.3)
+
+    if has_lr:
+        ax = axes[2, 0]
+        ax.plot(epochs, [r["lr"] for r in rows], label="lr", color="tab:red")
+        ax.set_xlabel("Epoch"); ax.set_ylabel("Learning rate"); ax.set_title("Learning Rate (ReduceLROnPlateau)")
+        ax.set_yscale("log"); ax.legend(); ax.grid(alpha=0.3)
+        axes[2, 1].axis("off")
 
     plt.tight_layout()
 

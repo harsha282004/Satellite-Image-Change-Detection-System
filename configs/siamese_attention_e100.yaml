@@ -1,0 +1,37 @@
+# Phase 13, Experiment C: identical to configs/siamese_attention_e60.yaml except for the maximum
+# epoch budget (100 vs. 60). Same architecture/data/optimizer/seed/early-stopping/scheduler as
+# Experiment B, isolating the effect of a larger ceiling given the same early-stopping patience.
+extends: config.yaml
+
+experiment_name: siamese_unet_diff_concat_attention_e100
+
+model:
+  type: siamese_unet
+  base_channels: 32
+  comparison_mode: diff_concat
+  use_attention: true
+
+dataset:
+  root: data/raw/levir_cd
+  image_size: 256
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+
+training:
+  epochs: 100  # maximum budget — early stopping may end training sooner (not mandatory to reach 100)
+  learning_rate: 0.0001
+  optimizer: adam
+  weight_decay: 0.0
+  loss: bce_dice
+  seed: 42
+  early_stopping:
+    enabled: true
+    monitor: val_iou
+    patience: 10
+  scheduler:
+    type: reduce_on_plateau
+    factor: 0.5
+    patience: 4
+    min_lr: 1.0e-6

@@ -4,6 +4,7 @@ Run with: venv/Scripts/python.exe -m src.training.train --config configs/baselin
 """
 import argparse
 import random
+import time
 from pathlib import Path
 
 import numpy as np
@@ -61,11 +62,39 @@ def build_model(config: dict) -> torch.nn.Module:
 def build_optimizer(config: dict, model: torch.nn.Module) -> torch.optim.Optimizer:
     name = config["training"]["optimizer"].lower()
     lr = config["training"]["learning_rate"]
+    weight_decay = config["training"].get("weight_decay", 0.0)
     if name == "adam":
-        return torch.optim.Adam(model.parameters(), lr=lr)
+        return torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    if name == "adamw":
+        return torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     if name == "sgd":
-        return torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    raise ValueError(f"Unknown optimizer: {name!r}")
+        return torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=weight_decay)
+    raise ValueError(f"Unknown optimizer: {name!r} (expected 'adam', 'adamw', or 'sgd')")
+
+
+def build_scheduler(config: dict, optimizer: torch.optim.Optimizer):
+    """Phase 13: optional ReduceLROnPlateau. Absent/`"none"` in a config (every pre-Phase-13
+    config) means no scheduler — training runs at the constant configured learning rate,
+    unchanged from before this function existed."""
+    sched_config = config["training"].get("scheduler", "none")
+    if sched_config is None:
+        return None
+    if isinstance(sched_config, str):
+        if sched_config.lower() == "none":
+            return None
+        raise ValueError(f"Unknown scheduler config: {sched_config!r}")
+    if isinstance(sched_config, dict):
+        sched_type = sched_config.get("type", "reduce_on_plateau")
+        if sched_type == "reduce_on_plateau":
+            return torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="max",  # monitoring val_iou by default — higher is better
+                factor=sched_config.get("factor", 0.5),
+                patience=sched_config.get("patience", 4),
+                min_lr=sched_config.get("min_lr", 1e-6),
+            )
+        raise ValueError(f"Unknown scheduler type: {sched_type!r}")
+    raise ValueError(f"Unknown scheduler config: {sched_config!r}")
 
 
 def main() -> int:
@@ -106,6 +135,12 @@ def main() -> int:
 
     optimizer = build_optimizer(config, model)
     loss_fn = get_loss(config["training"]["loss"])
+    scheduler = build_scheduler(config, optimizer)
+    early_stopping = config["training"].get("early_stopping", {"enabled": False})
+    print(f"Optimizer: {config['training']['optimizer']}, lr={config['training']['learning_rate']}, "
+          f"weight_decay={config['training'].get('weight_decay', 0.0)}")
+    print(f"Scheduler: {config['training'].get('scheduler', 'none')}")
+    print(f"Early stopping: {early_stopping}")
 
     trainer = Trainer(
         model=model,
@@ -115,10 +150,21 @@ def main() -> int:
         checkpoint_dir=config["paths"]["checkpoint_dir"],
         experiment_name=config["experiment_name"],
         config=config,
+        scheduler=scheduler,
+        early_stopping=early_stopping,
     )
 
-    best_val_iou = trainer.fit(train_loader, val_loader, num_epochs=config["training"]["epochs"])
-    print(f"\nTraining complete. Best val IoU: {best_val_iou:.4f}")
+    t0 = time.time()
+    result = trainer.fit(train_loader, val_loader, num_epochs=config["training"]["epochs"])
+    training_time_s = time.time() - t0
+
+    print(f"\nTraining complete.")
+    print(f"  Max epochs configured: {result['max_epochs']}")
+    print(f"  Actual epochs trained: {result['epochs_trained']}")
+    print(f"  Early stopped: {result['early_stopped']}")
+    print(f"  Best epoch: {result['best_epoch']}")
+    print(f"  Best val IoU: {result['best_val_iou']:.4f}")
+    print(f"  Training time: {training_time_s:.1f}s ({training_time_s/60:.1f} min)")
     return 0
 
 

@@ -5,6 +5,162 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 13 — Advanced Training Strategy
+
+**Date:** 2026-08-24
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/training/trainer.py`: `Trainer` gains optional `scheduler` and `early_stopping` constructor
+  args (both default to off/`None`, preserving every pre-Phase-13 config's exact behavior).
+  `fit()` now: logs current LR every epoch, steps the scheduler on validation IoU, tracks
+  `best_epoch` (not just `best_val_iou`), and breaks the loop when `early_stopping.patience`
+  epochs pass without a new best validation IoU — always keeping the best-epoch checkpoint
+  regardless of when/whether training stops early. Returns a result dict (`best_val_iou`,
+  `best_epoch`, `max_epochs`, `epochs_trained`, `early_stopped`) instead of a bare float.
+- `src/training/train.py`: `build_optimizer` adds AdamW + configurable `weight_decay` (Adam
+  remains the unchanged default); new `build_scheduler` builds `ReduceLROnPlateau` from a config
+  dict or returns `None` for the string `"none"`/absent key; `main()` wires both into `Trainer`,
+  wraps `fit()` in a wall-clock timer, and prints a fuller final summary (max epochs vs. actual
+  epochs trained vs. best epoch vs. early-stopped, explicitly distinguished per the user's
+  instruction not to conflate a capped budget with epochs actually trained).
+- `src/visualization/plots.py`: added a conditional 5th subplot (learning-rate curve, log scale)
+  — only rendered when an experiment's `history.csv` has an `lr` column (Phase 13+ experiments),
+  so all 5 pre-Phase-13 training-curve PNGs are unaffected if regenerated.
+- `configs/siamese_attention_e60.yaml`, `configs/siamese_attention_e100.yaml`: Experiments B/C —
+  identical architecture/data/optimizer/seed to the preserved Experiment A
+  (`configs/siamese_attention.yaml`), differing only in max epochs (60/100) and the new
+  early-stopping (patience=10, monitor=val_iou) / `ReduceLROnPlateau` (factor=0.5, patience=4,
+  min_lr=1e-6) blocks. Distinct `experiment_name`s from Experiment A and from each other —
+  deliberately, per the Phase 6 lesson (never reuse a tracked experiment's name).
+- 18 new pytest tests (`tests/test_trainer.py`): early stopping stops at the right epoch (scripted
+  val_iou sequence via a mocked `validate`), best checkpoint retained is the best epoch not the
+  last, scheduler reduces LR on a scripted plateau, LR stays constant with no scheduler, LR is
+  logged every epoch, regression test proving early-stopping-disabled runs the full epoch count,
+  plus direct unit tests of `build_optimizer`/`build_scheduler`.
+- Ran all 3 experiments for real on the actual LEVIR-CD data/GPU (see EXPERIMENTS RUN/RESULTS
+  below), evaluated all 3 on the real held-out test set, generated training-curve plots for B/C,
+  wrote `outputs/metrics/training_experiment_comparison.csv`, and wrote up the full methodology,
+  interpretation, and honest limitations in `docs/TRAINING.md` (Phase 13 section appended).
+- Updated `README.md` (Results section: new Phase 13 A/B/C comparison table and "current best
+  model" claim; Training section: mentions early stopping/scheduler and the new best-model
+  command; Inference & Change Analysis section: "current best model" command updated to point at
+  the new best checkpoint) and `dashboard/app.py` (`MODEL_OPTIONS`: added Experiment B and C as
+  new selectable entries, with C — the new best — as the new default/first entry; the original
+  Phase 8 attention entry and all other pre-existing entries were kept unchanged, per the explicit
+  instruction not to remove/replace dashboard functionality unnecessarily).
+
+**FILES CREATED:**
+- `configs/siamese_attention_e60.yaml`, `configs/siamese_attention_e100.yaml`
+- `tests/test_trainer.py`
+- `outputs/checkpoints/siamese_unet_diff_concat_attention_{e60,e100}/{best,last}.pt` (gitignored)
+- `outputs/experiments/siamese_unet_diff_concat_attention_{e60,e100}/{history.csv,history.json}` (gitignored)
+- `outputs/metrics/siamese_unet_diff_concat_attention_{e60,e100}_test_metrics.json` (gitignored)
+- `outputs/metrics/training_experiment_comparison.csv`
+- `outputs/visualizations/siamese_unet_diff_concat_attention_{e60,e100}_{training_curves,test_predictions}.png` (gitignored)
+
+**FILES MODIFIED:**
+- `src/training/trainer.py`, `src/training/train.py`, `src/visualization/plots.py`
+- `README.md`, `docs/TRAINING.md`, `dashboard/app.py`
+
+**EXPERIMENTS RUN (real, on the actual GPU/dataset — see `docs/TRAINING.md` for the full
+methodology and interpretation):**
+1. Experiment A — preserved unchanged from Phase 8 (`configs/siamese_attention.yaml`, 30 fixed
+   epochs, no scheduler, no early stopping). Not retrained; existing checkpoint/history/test-
+   metrics re-verified unchanged after B and C completed.
+2. Experiment B — `configs/siamese_attention_e60.yaml`, max 60 epochs, early stopping
+   (patience=10) + `ReduceLROnPlateau`. Interrupted once by an unrelated session interruption at
+   epoch 6 of an earlier attempt; killed cleanly and **restarted from scratch** (not resumed —
+   this `Trainer` has no checkpoint-resume capability) after the partial run's outputs were
+   deleted. The restart completed the full run reported below.
+3. Experiment C — `configs/siamese_attention_e100.yaml`, max 100 epochs, same early
+   stopping/scheduler settings as B. Also interrupted and killed once (partial progress to epoch
+   55) during a separate session pause; partial outputs deleted and **restarted from scratch** for
+   the same reason. The restart completed the full run reported below.
+4. All 3 evaluated on the real, held-out LEVIR-CD test split (128 images) via
+   `src/evaluation/evaluate.py`, using each experiment's own `best.pt` (selected by validation IoU
+   during training) and own config — the test set was never used for checkpoint selection or for
+   choosing which experiment "won" the model comparison (that judgment was made on validation IoU;
+   test evaluation happened once per experiment, after training was already complete).
+
+**RESULTS (actual, measured — full data: `outputs/metrics/training_experiment_comparison.csv`,
+interpretation: `docs/TRAINING.md` Phase 13 section):**
+```
+                          Max ep.  Actual ep.  Best ep.  Early stop  Val IoU@best  Test IoU
+Experiment A (Phase 8)    30       30          26        N/A         0.6702        0.6560
+Experiment B (max 60)     60       60          60        No          0.7106        0.7031
+Experiment C (max 100)    100      78          68        Yes         0.7188        0.7123
+```
+**Experiment A was genuinely undertrained**: giving the identical architecture/data/optimizer more
+epochs plus a plateau-triggered LR scheduler improved test IoU by +0.0563 absolute (0.6560 →
+0.7123), substantially larger than any architecture-choice effect measured in Phase 8. The
+improvement mechanism is directly visible in Experiment B's training-curve LR panel: two scheduler
+step-downs (epoch 39, epoch 58), each immediately followed by an acceleration in validation
+IoU/Dice. **No overfitting was observed** in B or C — train/validation metrics track closely at
+every best epoch. Experiment C's early stopping triggered from a genuine validation-IoU plateau
+(oscillating ~0.70-0.72 for ~10 epochs), not from train/val divergence. Experiment B, notably,
+never triggered early stopping and was still at its best on the very last (60th) epoch — an
+honestly-reported open question about whether an even longer budget would help further, which
+Experiment C's early stop (at epoch 78, best epoch 68) suggests is approaching a genuine plateau
+for this specific architecture/seed/recipe, but does not prove for other configurations.
+
+**siamese_unet_diff_concat_attention_e100 (Experiment C) is the new best model in this project**,
+superseding Phase 8's `siamese_unet_diff_concat_attention` (Experiment A) — same architecture,
+better training strategy.
+
+**TESTS:**
+- `pytest tests/`: 86/86 passed (68 from Phase 12 + 18 new: early-stopping control flow, best-
+  checkpoint retention, scheduler LR reduction, LR logging, `build_optimizer`/`build_scheduler`
+  unit tests, and a regression test confirming full-epoch-count behavior is unchanged when the new
+  features are left unconfigured).
+- Backward-compatibility smoke test: re-ran `configs/baseline.yaml` (throwaway experiment name,
+  `--epochs 2`) through the modified `Trainer`/`train.py` — reproduced the exact epoch-1
+  `train_loss=0.7457` seen in every prior baseline run, confirming the refactor introduced no
+  behavioral change for existing configs.
+- Both new configs (`siamese_attention_e60.yaml`, `siamese_attention_e100.yaml`) smoke-tested
+  (1-2 epochs, throwaway checkpoint/history cleaned up afterward) before committing to full runs —
+  confirmed correct param count (15,428,125, matching Experiment A's architecture exactly),
+  correct scheduler/early-stopping config printed and active.
+- All 3 experiments' checkpoints evaluated for real on the held-out test set (not estimated);
+  Experiment A's pre-existing checkpoint/metrics re-verified byte-identical to their Phase 8 values
+  after B and C's runs completed, confirming Rule 11 ("preserve all baseline results") was upheld.
+
+**DOCUMENTATION UPDATED:**
+- `docs/TRAINING.md` — full Phase 13 section: motivation, what was added, the 3-experiment
+  comparison table, interpretation (undertraining confirmed, no overfitting observed, the open
+  question about Experiment B's uncapped ceiling), and known limitations of this experiment set.
+- `README.md` — Results section (new A/B/C table, explicit "new best model" statement), Training
+  section (mentions early stopping/scheduler, adds the Experiment C training command), Inference &
+  Change Analysis section ("current best model" example command updated).
+- `DEVELOPMENT_LOG.md` — this entry.
+
+**KNOWN LIMITATIONS:**
+- Single seed (42) for A/B/C — no variance estimate; the Phase 6 GPU-non-determinism caveat
+  applies to these runs too.
+- Experiment A's training time was never precisely measured (the `time.time()` wall-clock
+  instrumentation didn't exist until this phase) — recorded honestly as
+  `NOT_PRECISELY_MEASURED_PRE_PHASE13` in the CSV rather than estimated or backfilled.
+- Early-stopping patience (10) and scheduler patience (4) were used at their specified default
+  values, not themselves tuned or searched.
+- Only one architecture (Siamese+Attention, `diff_concat`) was tested with longer training —
+  whether the baseline U-Net or the other comparison modes would show similar gains from longer
+  training + scheduling is untested; Phase 8's equal-30-epoch comparison remains the only
+  controlled cross-architecture result in this project.
+- Two separate session interruptions killed in-progress training runs mid-epoch during this phase
+  (once for Experiment B, once for Experiment C); both were restarted cleanly from scratch after
+  deleting the partial outputs — no partial/interrupted run's results were ever reported as if
+  complete.
+
+**NEXT PHASE:**
+- PHASE 14 — Loss Function and Hyperparameter Experiments: using Experiment C's training strategy
+  (max epochs + early stopping + LR scheduler) as the new baseline recipe, compare loss functions
+  (Focal+Dice, Weighted BCE+Dice, Tversky — to be added to `models/losses.py`) and a controlled
+  learning-rate/weight-decay/batch-size matrix, selecting on validation performance only. Not
+  started without explicit user go-ahead, per this project's phase-by-phase execution rule.
+
+---
+
 ## PHASE 12 — Final Integration & Documentation
 
 **Date:** 2026-08-23
