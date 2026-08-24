@@ -11,6 +11,91 @@ only the "wait for the user between phases" behavior changed.
 
 ---
 
+## PHASE 21 — Multi-Temporal Change Analysis
+
+**Date:** 2026-08-25
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/temporal/sequence.py`: `select_temporal_sequence(items, n_dates)` picks N dates spread as
+  evenly as possible across a real STAC search's available time span (closest-real-item-to-each-
+  evenly-spaced-target-timestamp, never fabricating a date); `build_intervals()` pairs an ordered
+  sequence into adjacent (from, to) tuples; `compute_interval_record()` packages one interval's
+  real change statistics (via `src/analysis/statistics.py`, unmodified) and severity distribution
+  (via `src/analysis/severity.py`, unmodified) with its real dates/STAC item ids. Module docstring
+  states explicitly, and repeats everywhere the result is surfaced: **no causal or tracking claims
+  are made** — each interval is an entirely independent two-image detection; the model has no
+  mechanism to track a specific change across more than two images.
+- `scripts/multitemporal_analysis.py`: real end-to-end script — searches real Sentinel-2 items
+  over Phase 11/18's Pflugerville, TX bbox across a multi-year range with genuine cloud filtering,
+  selects N dates, fetches real georeferenced crops for each (Phase 18's
+  `fetch_georeferenced_crop`), runs the best model independently on every adjacent pair, computes
+  per-interval statistics/severity, exports JSON/CSV, and renders a temporal bar-chart
+  visualization explicitly captioned "independent detections, not a tracked trend" on the chart
+  itself.
+- `tests/test_temporal_sequence.py`: 8 new tests using a tiny synthetic fake-STAC-item class
+  (id + datetime only, no network) — date-count validation, endpoint selection for 2 dates, real
+  even spread across a synthetic 8-year span, no-duplicate-item guarantee, interval pairing
+  correctness, and `compute_interval_record` correctness (with and without detected change).
+- `docs/EVALUATION.md`: new "Phase 21" section (real result table, no-causal-claims statement,
+  status summary).
+- The existing two-image analysis path (`src/inference/predict.py`, `src/analysis/*`, the
+  dashboard's default mode) is completely unmodified — verified by the full test suite passing
+  unchanged and by `scripts/multitemporal_analysis.py` calling those modules' existing public
+  functions rather than reimplementing them.
+
+**FILES CREATED:**
+- `src/temporal/__init__.py`, `src/temporal/sequence.py`, `scripts/multitemporal_analysis.py`,
+  `tests/test_temporal_sequence.py`
+
+**FILES MODIFIED:**
+- `.gitignore` (added `outputs/multitemporal/`, same regenerable/network-dependent pattern as
+  `outputs/geospatial/`), `docs/EVALUATION.md`, `README.md`
+
+**EXPERIMENTS RUN (real, against live Sentinel-2 data):**
+1. `scripts/multitemporal_analysis.py`, run 2026-08-25. Searched
+   `2017-01-01/2024-12-31` over `[-97.6500, 30.4100, -97.5900, 30.4600]` with cloud cover < 5%:
+   **385 real candidate dates found** (2017-01-07 to 2024-12-31). Selected 5 dates spread across
+   that span; fetched 5 real georeferenced crops; computed 4 independent intervals.
+
+**RESULTS (actual, measured — full data: `outputs/multitemporal/temporal_report.{json,csv}`):**
+```
+2017-01-07 -> 2019-01-05: 1 region,  390 px changed (0.119%), 3.90 ha
+2019-01-05 -> 2021-01-04: 1 region,  720 px changed (0.220%), 7.20 ha
+2021-01-04 -> 2022-12-25: 3 regions, 426 px changed (0.130%), 4.26 ha
+2022-12-25 -> 2024-12-31: 1 region,  286 px changed (0.087%), 2.86 ha
+```
+A real, unforced result — not tuned to show a particular pattern. Explicitly NOT presented as a
+trend line for one physical change (see the no-causal-claims notice above); each interval carries
+the full Phase 11/18 domain-gap caveat (10 m/pixel Sentinel-2 vs. 0.5 m/pixel training data, no
+ground truth for any real-world pair here).
+
+**TESTS:**
+- `pytest tests/test_temporal_sequence.py -v`: 8/8 passed.
+- `pytest tests/`: 170/170 passed (162 from Phase 20 + 8 new).
+
+**DOCUMENTATION UPDATED:**
+- `docs/EVALUATION.md` — new Phase 21 section.
+- `README.md` — new "Multi-Temporal Analysis" section (after "Geospatial Change Intelligence").
+- `DEVELOPMENT_LOG.md` — this entry.
+
+**KNOWN LIMITATIONS:**
+- No causal or tracking claims are possible with this architecture — repeated deliberately, since
+  this is the single most important caveat about this feature (same pattern as Phase 17's severity
+  disclaimer).
+- Only demonstrated on one location (Pflugerville, TX) and one 5-date/4-interval selection, not a
+  systematic multi-location or multi-density temporal study.
+- Same domain-gap and no-ground-truth limitations as Phase 11/18, inherited in full.
+- `outputs/multitemporal/` requires live network access to regenerate and is gitignored,
+  consistent with `outputs/real_world_demo/` and `outputs/geospatial/`.
+
+**NEXT PHASE:**
+- PHASE 22 — Real-World Pipeline Hardening. Proceeding automatically per the standing autonomous
+  authorization.
+
+---
+
 ## PHASE 20 — Transformer-Based Architecture (Research Comparison)
 
 **Date:** 2026-08-25

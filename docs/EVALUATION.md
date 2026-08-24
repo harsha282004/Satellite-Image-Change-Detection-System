@@ -475,3 +475,69 @@ live network access to Earth Search/AWS Open Data and are regenerable by re-runn
 | Interactive Folium map with per-region popups | **Implemented, measured** |
 | Severity scoring integrated into geospatial features | **Implemented, measured** |
 | Real-world geospatial accuracy validated against ground truth | **Not implemented, and not possible** — no ground truth exists for this real-world pair (same limitation as Phase 11) |
+
+## Phase 21 — Multi-Temporal Change Analysis
+
+**No causal or tracking claims, stated once here and repeated in code/script output:** every
+interval below is an entirely independent two-image detection run on that one adjacent pair. The
+underlying model has no mechanism to track a specific physical object or change across more than
+two images, and this phase adds none. A region flagged in one interval and a region flagged in
+another interval are never asserted to be the same underlying event — they are independent
+detections that happen to occupy nearby pixels. This phase reports per-interval detected change
+only, never a trajectory, a rate attributed to one tracked object, or any inference about cause.
+
+Extends Phase 11/18's real-world Sentinel-2 demonstration from a single before/after pair to an
+ordered sequence of real acquisitions (`src/temporal/sequence.py`, `scripts/
+multitemporal_analysis.py`). `select_temporal_sequence()` picks N dates spread as evenly as
+possible across the real available time span (not the first N, not random) from a genuine
+cloud-filtered STAC search — it never fabricates a date without a real corresponding acquisition.
+`build_intervals()` pairs the sequence into adjacent (T_i, T_i+1) intervals; each interval is
+analyzed by the existing two-image pipeline (`Predictor`, `compute_change_statistics`,
+`compute_severity_for_regions`) completely independently of every other interval. The existing
+two-image mode (dashboard default, `scripts/geospatial_analysis.py`) is unmodified.
+
+### Real, measured result
+
+Run: `venv/Scripts/python.exe scripts/multitemporal_analysis.py` (2026-08-25), same Pflugerville,
+TX bbox as Phase 11/18 (`[-97.6500, 30.4100, -97.5900, 30.4600]`). Searched real Sentinel-2 L2A
+acquisitions for this area, 2017-01-01 to 2024-12-31, cloud cover < 5%: **385 real candidate
+dates found**, spanning 2017-01-07 to 2024-12-31. 5 dates selected, spread across that real span:
+
+| # | Date | STAC item |
+|---|---|---|
+| 1 | 2017-01-07 | S2A_14RPU_20170107_0_L2A |
+| 2 | 2019-01-05 | S2B_14RPU_20190105_0_L2A |
+| 3 | 2021-01-04 | S2B_14RPU_20210104_1_L2A |
+| 4 | 2022-12-25 | S2B_14RPU_20221225_0_L2A |
+| 5 | 2024-12-31 | S2B_14RPU_20241231_0_L2A |
+
+4 independent intervals, each a separate two-image detection (threshold 0.40, Phase 15.2):
+
+| Interval | Regions | Changed pixels | % changed | Changed area (ha) |
+|---|---|---|---|---|
+| 2017-01-07 → 2019-01-05 | 1 | 390 | 0.119% | 3.90 |
+| 2019-01-05 → 2021-01-04 | 1 | 720 | 0.220% | 7.20 |
+| 2021-01-04 → 2022-12-25 | 3 | 426 | 0.130% | 4.26 |
+| 2022-12-25 → 2024-12-31 | 1 | 286 | 0.087% | 2.86 |
+
+Full per-interval severity distributions: `outputs/multitemporal/temporal_report.json`. Temporal
+bar-chart visualization (change area and region count per interval, explicitly captioned
+"independent detections, not a tracked trend" on the chart itself, not only in this document):
+`outputs/multitemporal/temporal_change_area.png`.
+
+**These four numbers must not be read as a rising/falling trend line for one physical change** —
+each is a separate detection over a different, non-overlapping pair of dates, inheriting Phase
+11/18's full domain-gap caveat (10 m/pixel Sentinel-2 vs. 0.5 m/pixel LEVIR-CD training data, no
+ground truth for any of these real-world pairs). The interval-to-interval variation (1-3 regions,
+2.86-7.20 ha) is a real, unforced measurement, not tuned to show a particular pattern.
+
+### Phase 21 status summary
+
+| Item | Status |
+|---|---|
+| Real multi-date STAC search with genuine cloud filtering | **Implemented, measured** (385 real candidate dates found) |
+| Evenly-spread date selection across the real available span | **Implemented, tested** (8 tests, `tests/test_temporal_sequence.py`, synthetic timestamps) |
+| Independent per-interval change statistics + severity | **Implemented, measured** (4 real intervals, 2017-2024) |
+| Temporal visualization (change area / region count per interval) | **Implemented, measured** |
+| Existing two-image mode preserved unmodified | **Verified** — no changes to `src/inference/predict.py`, `src/analysis/*`, or the dashboard's default path |
+| Causal/tracking claims across intervals | **Explicitly not made, and not possible** — the model has no cross-interval tracking mechanism; stated in the module docstring, script output, and this document |

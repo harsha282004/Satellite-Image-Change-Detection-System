@@ -304,6 +304,26 @@ apply in full — no ground truth exists for this pair, so this is a real, unfor
 a validated accuracy figure. Full results table and pipeline details:
 [`docs/EVALUATION.md`](docs/EVALUATION.md) (Phase 18 section).
 
+## Multi-Temporal Analysis
+
+**Implemented (Phase 21).** Extends the geospatial demonstration above from a single before/after
+pair to an ordered sequence of real Sentinel-2 acquisitions. `src/temporal/sequence.py` selects N
+dates spread evenly across a real, cloud-filtered STAC search (never fabricated dates) and pairs
+them into adjacent intervals, each analyzed by the existing two-image pipeline **completely
+independently**. **No causal or tracking claims are made:** a region detected in one interval is
+never asserted to be the same physical change as a region in another interval — the model has no
+cross-image tracking mechanism.
+
+```bash
+python scripts/multitemporal_analysis.py
+```
+
+Real measured result: searched 2017-2024 for the same Pflugerville, TX area as Phase 11/18, found
+**385 real cloud-filtered candidate dates**, selected 5 spread across that span, and computed 4
+independent intervals: 1-3 regions and 2.86-7.20 ha detected-change area per interval (full
+table and the "not a trend line" caveat: [`docs/EVALUATION.md`](docs/EVALUATION.md), Phase 21
+section). The existing two-image mode (dashboard default) is completely unmodified.
+
 ## Limitations
 
 **Finalized (Phase 12).** Full account in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): dataset

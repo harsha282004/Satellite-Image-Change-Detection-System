@@ -72,5 +72,8 @@ outputs/real_world_demo/
 # Geospatial analysis outputs (regenerable via scripts/geospatial_analysis.py, requires network access)
 outputs/geospatial/
 
+# Multi-temporal analysis outputs (regenerable via scripts/multitemporal_analysis.py, requires network access)
+outputs/multitemporal/
+
 # Logs
 *.log
