@@ -88,6 +88,32 @@ def load_image_from_upload(uploaded_file) -> np.ndarray | None:
         return None
 
 
+def load_selected_threshold(experiment_name: str) -> tuple:
+    """Returns (threshold, source_note). Only applies the Phase 15.2 validation-optimized
+    threshold when the currently selected model matches the checkpoint that threshold was
+    actually swept for — every other model falls back to the untuned default 0.5, rather than
+    silently applying a threshold optimized for a different model's outputs."""
+    report_path = PROJECT_ROOT / "outputs" / "metrics" / "threshold_optimization_report.json"
+    if not report_path.exists():
+        return 0.5, "default (no threshold optimization run yet)"
+    with open(report_path) as f:
+        report = json.load(f)
+    if experiment_name in report.get("checkpoint", ""):
+        return (
+            report["selected_threshold"],
+            f"selected via validation-set sweep (Phase 15.2), by max validation IoU",
+        )
+    return 0.5, "default (threshold optimization was only run for the best model)"
+
+
+def probability_map_to_rgb(prob_map: np.ndarray) -> np.ndarray:
+    """Viridis-colored visualization of a [0,1] probability map, for display only."""
+    import matplotlib
+
+    colored = matplotlib.colormaps["viridis"](prob_map)  # (H, W, 4) float in [0,1]
+    return (colored[:, :, :3] * 255).astype(np.uint8)
+
+
 st.set_page_config(page_title="Satellite Change Detection", layout="wide")
 
 st.title("Satellite Image Change Detection")
@@ -111,10 +137,12 @@ with st.sidebar:
             f"model above."
         )
 
+    default_threshold, threshold_source = load_selected_threshold(experiment_name)
     threshold = st.slider(
-        "Decision threshold", min_value=0.0, max_value=1.0, value=0.5, step=0.05,
-        help="Sigmoid probability above this value is predicted as 'changed'. "
-             "docs/EVALUATION.md's reported metrics use the standard 0.5.",
+        "Decision threshold", min_value=0.0, max_value=1.0, value=default_threshold, step=0.05,
+        help="Prediction probability above this value is predicted as 'changed'. "
+             f"Default for this model: {threshold_source}. See docs/EVALUATION.md Phase 15.2 "
+             "for the full validation-set threshold sweep (outputs/metrics/threshold_analysis.csv).",
     )
     min_region_pixels = st.number_input(
         "Minimum region size (pixels)", min_value=1, value=4,
@@ -168,13 +196,15 @@ if before_file and after_file:
         elif st.button("Detect Changes", type="primary"):
             with st.spinner("Running inference..."):
                 predictor = load_predictor(config_path, checkpoint_path)
-                mask = predictor.predict_from_arrays(before_img, after_img, threshold=threshold)
+                prob_map = predictor.predict_probability_from_arrays(before_img, after_img)
+                mask = (prob_map > threshold).astype(np.uint8)
 
                 import cv2
                 size = predictor.image_size
                 before_resized = cv2.resize(before_img, (size, size))
                 after_resized = cv2.resize(after_img, (size, size))
                 overlay = create_overlay(after_resized, mask, color=(1.0, 0.0, 0.0), alpha=0.6)
+                prob_rgb = probability_map_to_rgb(prob_map)
 
                 pixel_size_m = levir_cd_effective_pixel_size(size)
                 stats = compute_change_statistics(
@@ -182,11 +212,19 @@ if before_file and after_file:
                 )
 
             st.header("2. Results")
-            c1, c2, c3, c4 = st.columns(4)
+            c1, c2, c3, c4, c5 = st.columns(5)
             c1.image(before_resized, caption="Before")
             c2.image(after_resized, caption="After")
-            c3.image(mask * 255, caption="Predicted Change Mask")
-            c4.image(overlay, caption="Overlay (predicted change = red)")
+            c3.image(prob_rgb, caption="Prediction Probability")
+            c4.image(mask * 255, caption="Predicted Change Mask")
+            c5.image(overlay, caption="Overlay (predicted change = red)")
+            st.caption(
+                "**Prediction Probability** = `sigmoid(model output)`, per pixel — brighter "
+                "(yellow) means the model output a higher probability of change at that pixel, "
+                "darker (purple) means lower. This is **not** a calibrated confidence score (i.e. "
+                "a pixel at 0.8 is not verified to be correct ~80% of the time) — no calibration "
+                "study has been run on this model. See docs/EVALUATION.md Phase 15."
+            )
 
             st.header("3. Change Statistics")
             m1, m2, m3, m4 = st.columns(4)
@@ -232,8 +270,11 @@ st.markdown(
 | Change region count / pixel & area quantification | **Implemented** |
 | Multiple trained models, selectable | **Implemented** |
 | Real, measured benchmark metrics display | **Implemented** |
+| Prediction probability visualization | **Implemented** — raw sigmoid output, not calibrated confidence |
+| Threshold optimization (validation-set sweep) | **Implemented** — see `docs/EVALUATION.md` Phase 15.2 |
 | Change-type classification (road/vegetation/water/etc.) | **Not implemented** — no such labels in training data |
 | Verified real-world (non-LEVIR-CD) imagery support | **Experimental / not verified** — see `docs/LIMITATIONS.md` and Phase 11 |
 | Cloud/shadow/registration-error detection | **Not implemented** |
+| Formal probability calibration (e.g. temperature scaling) | **Not implemented** — "prediction probability" is a raw sigmoid output only |
 """
 )

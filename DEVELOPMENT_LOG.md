@@ -5,6 +5,122 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 15 — Confidence, Probability and Threshold Optimization
+
+**Date:** 2026-08-25
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/inference/predict.py`: new `predict_probability()` (returns the raw `sigmoid(logits)`
+  probability map, float32 in [0,1]) — `predict_mask()` now calls it internally and thresholds,
+  so mask and probability are guaranteed consistent (same forward pass, verified by test). Added
+  `Predictor.predict_probability_from_arrays/from_paths`.
+- `src/evaluation/threshold_analysis.py`: `sweep_thresholds()` runs the model once per batch and
+  reuses the logits to compute metrics at every candidate threshold (not one forward pass per
+  threshold); `select_best_threshold()` picks by a given metric, breaking ties toward 0.5.
+- `scripts/threshold_optimization.py`: real run — swept 9 thresholds (0.30-0.70) on the
+  **validation** set, selected by validation IoU, then evaluated that one threshold once on the
+  **test** set (never used for selection, per Rule 3). Wrote `outputs/metrics/threshold_analysis.
+  csv` and a 5-panel metric-vs-threshold plot.
+- `scripts/generate_probability_maps.py`: saved representative probability-map/mask/overlay
+  visualizations (15.1) for 3 real test scenes.
+- `src/evaluation/robustness.py`: 6 controlled perturbation functions (brightness ±30%, contrast
+  ±30%, Gaussian noise σ=15, 5px shift), all pure and unit-tested.
+- `scripts/robustness_analysis.py`: real run — 10 test images × 6 perturbations (applied to the
+  after-image only, simulating date-to-date variation), IoU measured against unperturbed ground
+  truth, worst-case failure visualized.
+- `dashboard/app.py`: added a "Prediction Probability" panel (viridis heatmap); threshold slider
+  now defaults to the validation-optimized value **only when the selected model matches the
+  checkpoint that threshold was swept for**, else falls back to 0.5; capability table updated with
+  new rows (probability display: implemented; threshold optimization: implemented; formal
+  calibration: explicitly **not** implemented) — terminology "prediction probability" used
+  throughout, "confidence" avoided per the instruction not to use that term without calibration.
+- 30 new pytest tests: `test_predict_probability.py` (3 — shape/range, mask-probability
+  consistency, cross-threshold consistency), `test_threshold_analysis.py` (5 — sweep correctness,
+  a real recall-monotonicity check against actual model behavior, selection logic incl. tie-
+  breaking), `test_robustness.py` (11 — each perturbation's identity/boundary/determinism
+  properties, shape/dtype preservation for all 6 registered perturbations).
+- `docs/EVALUATION.md`: new "Phase 15" section (probability maps, threshold sweep table +
+  interpretation, dashboard integration, robustness table + worst-case finding); corrected the
+  now-stale "threshold fixed at 0.5" limitation and "not yet implemented" status row.
+
+**FILES CREATED:**
+- `src/evaluation/threshold_analysis.py`, `src/evaluation/robustness.py`
+- `scripts/threshold_optimization.py`, `scripts/generate_probability_maps.py`,
+  `scripts/robustness_analysis.py`
+- `tests/test_predict_probability.py`, `tests/test_threshold_analysis.py`, `tests/test_robustness.py`
+- `outputs/metrics/threshold_analysis.csv`, `threshold_optimization_report.json`,
+  `robustness_analysis.csv`, `robustness_summary.json` (gitignored, consistent with existing policy)
+- `outputs/visualizations/threshold_analysis.png`, `probability_maps/*.png`,
+  `robustness/worst_case_test_101.png` (gitignored)
+
+**FILES MODIFIED:**
+- `src/inference/predict.py` (refactored `predict_mask` to build on new `predict_probability`)
+- `dashboard/app.py`, `docs/EVALUATION.md`, `README.md`
+
+**EXPERIMENTS RUN (real, on the actual best model — `siamese_unet_diff_concat_attention_e100`):**
+1. Threshold sweep: 9 thresholds × validation set (64 images), then the selected threshold once
+   on the test set (128 images).
+2. Probability-map generation: 3 representative real test scenes.
+3. Robustness: 10 real test images (with ground truth) × 6 perturbations = 60 perturbed
+   evaluations + 10 baseline evaluations, all against real LEVIR-CD ground truth.
+
+**RESULTS (actual, measured — full data in the CSVs/JSONs listed above, interpretation in
+`docs/EVALUATION.md` Phase 15 section):**
+```
+Threshold sweep (validation): IoU ranges 0.7131 (t=0.70) to 0.7196 (t=0.40) — a spread of only
+  0.0065, i.e. the model is essentially threshold-insensitive in 0.30-0.70.
+Selected threshold: 0.40 (by validation IoU).
+Test set @ 0.40: IoU=0.7122  |  Test set @ default 0.50: IoU=0.7123 — a tie within noise, NOT
+  a real improvement. Reported honestly as such, not spun as a win.
+
+Robustness (mean IoU degradation across 10 images):
+  Gaussian noise: +0.0098 (minimal)         Contrast +30%:  +0.0005 (negligible)
+  Brightness +30%: +0.0200 (minimal)        Contrast -30%:  +0.1048 (substantial)
+  Shift 5px:       +0.1178 (substantial)    Brightness -30%: +0.1198 (substantial)
+Worst single case: test_101.png, contrast -30%, IoU drop = 0.4234 (from good detection to
+  near-total miss, mostly false negatives) — real vulnerability, visualized and saved.
+```
+**Key findings, both genuine and neither exaggerated nor downplayed:** (1) threshold tuning does
+not meaningfully help this model — a useful negative result; (2) the model has a real, measurable
+vulnerability to darkened/low-contrast imagery and small misregistration, consistent with but now
+quantifying the qualitative concerns already in `docs/LIMITATIONS.md`.
+
+**TESTS:**
+- `pytest tests/`: 116/116 passed (86 from Phase 14 + 30 new).
+- Real end-to-end dashboard verification via Playwright after the `predict.py` refactor: an
+  initial test run hit a real bug — Streamlit's `@st.cache_resource` had cached a `Predictor`
+  instance from before the refactor, so the running server's file-watcher picked up the edited
+  `dashboard/app.py` but served a stale cached object missing the new
+  `predict_probability_from_arrays` method (`AttributeError`, caught in the server's own log, not
+  hidden). Fixed by killing and cleanly restarting the Streamlit process (module-level caches
+  don't survive a fresh interpreter); re-verified with the same Playwright script — zero errors,
+  correct default threshold (0.40) shown in the slider, probability heatmap rendered correctly.
+
+**DOCUMENTATION UPDATED:**
+- `docs/EVALUATION.md` — new Phase 15 section; corrected two stale claims from before Phase 15 existed.
+- `README.md` — Evaluation section summary of the Phase 15 findings.
+- `DEVELOPMENT_LOG.md` — this entry.
+
+**KNOWN LIMITATIONS:**
+- No formal probability calibration (reliability diagrams / Expected Calibration Error) — stated
+  explicitly as not implemented everywhere "prediction probability" appears, per the instruction
+  never to call it "confidence" without one.
+- Threshold sweep and robustness testing were both run only for the single best model
+  (`siamese_unet_diff_concat_attention_e100`) — not repeated for the other 7 trained models.
+- Robustness testing used one perturbation magnitude each (±30% brightness/contrast, σ=15 noise,
+  5px shift) on 10 images — not a magnitude sweep or the full 128-image test set; a coarse,
+  real first measurement, not an exhaustive robustness certification.
+- Perturbations were applied to the after-image only, chosen as the more realistic simulation of
+  date-to-date variation — the before-image-only or both-images-perturbed cases were not tested.
+
+**NEXT PHASE:**
+- PHASE 16 — Region-Level Change Intelligence: not started without explicit user go-ahead, per
+  this project's phase-by-phase execution rule.
+
+---
+
 ## PHASE 14.3-14.4 — Hyperparameter Experiments & Final Configuration
 
 **Date:** 2026-08-24

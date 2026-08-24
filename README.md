@@ -118,9 +118,14 @@ reproducible even with a fixed seed): [`docs/TRAINING.md`](docs/TRAINING.md).
 
 ## Evaluation
 
-**Implemented (Phase 4-7).** Full rigorous writeup — methodology, class-imbalance-aware metric
-rationale, quantitative baseline-vs-Siamese comparison, qualitative results, training curves, and
-explicitly stated evaluation limitations — in [`docs/EVALUATION.md`](docs/EVALUATION.md).
+**Implemented (Phase 4-7, extended Phase 15).** Full rigorous writeup — methodology,
+class-imbalance-aware metric rationale, quantitative baseline-vs-Siamese comparison, qualitative
+results, training curves, explicitly stated evaluation limitations, prediction-probability maps,
+validation-only threshold optimization, and controlled robustness testing (brightness/contrast/
+noise/misregistration) — in [`docs/EVALUATION.md`](docs/EVALUATION.md). Notable Phase 15 finding:
+the model is essentially insensitive to decision threshold (0.30-0.70), but shows a real,
+measured sensitivity to reduced contrast/brightness and small misregistration (~0.10-0.12 mean
+IoU degradation, worst single case 0.42).
 
 ```bash
 python -m src.evaluation.evaluate --config configs/baseline.yaml \
