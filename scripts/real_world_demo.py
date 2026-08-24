@@ -27,6 +27,7 @@ from PIL import Image
 from src.analysis.statistics import compute_change_statistics
 from src.geospatial.raster import fetch_visual_crop, get_item_by_id
 from src.inference.predict import Predictor
+from src.realworld.validation import REAL_WORLD_DISCLAIMER, validate_real_world_input
 from src.visualization.overlays import create_overlay
 
 DEFAULT_BBOX = [-97.6500, 30.4100, -97.5900, 30.4600]  # [min_lon, min_lat, max_lon, max_lat]
@@ -64,9 +65,17 @@ def main() -> int:
     print(f"Fetched crops: before={before.shape}, after={after.shape} "
           f"(native resolution {SENTINEL2_PIXEL_SIZE_M} m/pixel)")
 
-    resolution_gap = LEVIR_CD_TRAINING_PIXEL_SIZE_M and (SENTINEL2_PIXEL_SIZE_M / LEVIR_CD_TRAINING_PIXEL_SIZE_M)
+    print(f"\n*** {REAL_WORLD_DISCLAIMER} ***")
+    validation_report = validate_real_world_input(before, after, pixel_size_meters=SENTINEL2_PIXEL_SIZE_M)
+    resolution_gap = validation_report["resolution"]["resolution_ratio"]
     print(f"NOTE: this is {resolution_gap:.0f}x coarser than the model's LEVIR-CD training "
           f"resolution ({LEVIR_CD_TRAINING_PIXEL_SIZE_M} m/pixel) — see docs/REAL_WORLD_DEMO.md")
+    if validation_report["warnings"]:
+        print(f"Phase 22 input validation ({len(validation_report['warnings'])} warning(s)):")
+        for w in validation_report["warnings"]:
+            print(f"  - {w}")
+    else:
+        print("Phase 22 input validation: no warnings (dimensions/registration/cloud heuristic).")
 
     predictor = Predictor(args.config, args.checkpoint)
     mask = predictor.predict_from_arrays(before, after)
@@ -111,6 +120,8 @@ def main() -> int:
         "ground_truth_available": False,
         "note": "No IoU/Dice/precision/recall can be reported: there is no ground-truth change "
                 "mask for this real-world image pair. This is a qualitative demonstration only.",
+        "disclaimer": REAL_WORLD_DISCLAIMER,
+        "phase22_input_validation": validation_report,
     }
     with open(args.out_dir / "report.json", "w") as f:
         json.dump(report, f, indent=2)

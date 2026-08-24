@@ -108,9 +108,30 @@ project's primary result. If network conditions improve in a future session, `De
 revisit, since its class scheme (no damage/minor/major/destroyed) is a more natural fit for a
 change-detection-derived pipeline than land-cover classes borrowed from a scene-segmentation task.
 
+## Real-world input validation (Phase 22) — real, computed checks, deliberately not more than that
+`src/realworld/validation.py` adds three genuinely computed diagnostic checks for arbitrary
+(non-LEVIR-CD) before/after uploads, surfaced in the dashboard and `scripts/real_world_demo.py`:
+- **Registration-offset estimate** (`cv2.phaseCorrelate`) — a real phase-correlation shift
+  estimate between before/after, flagged above 3px. This is a diagnostic only: it does **not**
+  align/correct the images, and phase correlation itself can be fooled by real (not just
+  misregistration-caused) large-scale change between the two images.
+- **Resolution-plausibility check** — flags imagery whose pixel size is ≥5x coarser than LEVIR-
+  CD's 0.5 m/pixel training resolution (only computable when a real pixel size is known, e.g. from
+  georeferenced raster metadata — never guessed for a plain upload).
+- **Cloud/bright-region heuristic** — flags images where >5% of pixels are simultaneously bright
+  and low-saturation. **Explicitly not a validated cloud detector**: no labeled cloud-mask data
+  exists anywhere in this project to validate it against; it will miss thin/translucent cloud and
+  can false-positive on bright rooftops, sand, snow, or plain overexposure.
+- The exact required disclaimer — `"Model trained on LEVIR-CD imagery. Performance on this
+  imagery has not been independently validated."` — is displayed wherever real-world/non-LEVIR-CD
+  imagery is processed (dashboard upload flow, `scripts/real_world_demo.py`).
+- **None of this constitutes accuracy validation.** These checks describe the *input*, not
+  whether the resulting prediction is correct — no ground truth exists for arbitrary real-world
+  uploads, so no accuracy claim is or can be made for them, benchmark or otherwise.
+
 ## Not implemented (explicitly, per Rule 4 — never implied as working)
-- Cloud/shadow detection or masking.
-- Automated image co-registration/alignment quality checking.
+- Actual image co-registration/alignment *correction* (Phase 22 adds an offset *estimate* only,
+  not a correction) or a validated (non-heuristic) cloud/shadow detector — see above.
 - Change-type classification (building vs. road vs. vegetation vs. water, etc.) — no such labels
   exist in the training data.
 - Physical-area estimation for non-LEVIR-CD imagery — `src/analysis/area.py`'s pixel-size

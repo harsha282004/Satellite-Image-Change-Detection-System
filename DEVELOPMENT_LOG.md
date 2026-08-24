@@ -11,6 +11,102 @@ only the "wait for the user between phases" behavior changed.
 
 ---
 
+## PHASE 22 — Real-World Pipeline Hardening
+
+**Date:** 2026-08-25
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/realworld/validation.py`: `REAL_WORLD_DISCLAIMER` (the exact required text: "Model trained
+  on LEVIR-CD imagery. Performance on this imagery has not been independently validated.");
+  `check_dimensions_match()`; `estimate_registration_offset()` (real `cv2.phaseCorrelate`
+  phase-correlation shift estimate, flagged above 3px — a diagnostic only, does not correct/align
+  images); `assess_resolution_plausibility()` (flags a pixel size ≥5x coarser than LEVIR-CD's
+  0.5 m/pixel training resolution, only when a real pixel size is known — never guessed);
+  `screen_for_cloud_cover()` (explicitly heuristic bright+low-saturation pixel screen, NOT a
+  validated cloud detector — no labeled cloud-mask data exists in this project to validate one
+  against, stated in every warning it produces); `validate_real_world_input()` orchestrates all
+  four and aggregates warnings.
+- `dashboard/app.py`: upload flow now displays the exact required disclaimer (`st.warning`) and
+  the real Phase 22 validation report (expander with all warnings, or a clean-pass caption) for
+  every uploaded before/after pair, before inference runs. Capabilities table extended with
+  Phase 18/19/20/21/22 rows (geospatial, multi-class limitation, Transformer comparison,
+  multi-temporal, input validation) — none of it was reflected there before this phase.
+- `scripts/real_world_demo.py`: now calls the same `validate_real_world_input()` (replacing a
+  previously-inline, duplicated resolution-gap calculation — Rule 6), prints the disclaimer and
+  any warnings, and saves the full validation report into `report.json`.
+- `tests/test_realworld_validation.py`: 11 new tests (dimension match/mismatch, resolution
+  plausibility for matching vs. Sentinel-2-like coarse resolution, registration-offset near-zero
+  for identical images vs. detected for a synthetically `np.roll`-shifted image, dimension-mismatch
+  handling, cloud-heuristic flagging a synthetic bright/white image vs. not flagging a natural
+  random image, and full-orchestrator aggregation for both a clean pair and a problematic one).
+- `docs/LIMITATIONS.md`: new "Real-world input validation (Phase 22)" section explaining exactly
+  what each check does and does **not** do (an estimate, not a correction; a heuristic, not a
+  validated detector); "Not implemented" section updated to stop listing cloud/registration
+  detection as entirely absent, replaced with the precise, narrower honest gap that remains
+  (correction/validated detection, not estimation/heuristic screening).
+
+**FILES CREATED:**
+- `src/realworld/__init__.py`, `src/realworld/validation.py`, `tests/test_realworld_validation.py`
+
+**FILES MODIFIED:**
+- `dashboard/app.py`, `scripts/real_world_demo.py`, `docs/LIMITATIONS.md`, `README.md`
+
+**EXPERIMENTS RUN (real, against live Sentinel-2 data and a live dashboard process):**
+1. `scripts/real_world_demo.py` re-run end-to-end (2026-08-25) against the same Pflugerville, TX
+   pair as Phase 11 (before=2019-12-06, after=2024-12-19) — confirmed the disclaimer prints, the
+   resolution-mismatch warning correctly fires (20.0x, matching Phase 11's already-documented
+   domain gap), no registration/cloud warnings for this well-aligned pair, and the model's
+   prediction is unchanged from Phase 11 (1621/65536 px changed, 2.47%, 19 regions ≥4px) — Phase 22
+   adds validation output only, it does not alter any prediction.
+2. Killed a stale Streamlit server process (leftover, holding port 8501) and relaunched fresh with
+   the Phase 22 dashboard changes loaded — standard practice for dashboard code changes, per
+   earlier phases' documented Streamlit live-reload caching gotcha.
+3. Verified the dashboard script executes with zero top-level exceptions via Streamlit's official
+   in-process `streamlit.testing.v1.AppTest` harness (a genuine, non-mocked execution of the real
+   script, including the new imports and Capabilities table). A full browser-based Playwright
+   walkthrough (the pattern used in Phases 10/15-17) was not performed this phase — no working
+   Playwright/Node install was available in this session's scratchpad, and setting one up fresh
+   would cost a large amount of wall-clock time at this session's measured ~18 KB/s network
+   throughput (Phase 19's finding) for a check `AppTest` + the real `real_world_demo.py` run
+   already substantially cover. Documented here as an honest scope reduction, not silently skipped.
+
+**RESULTS (actual, measured):**
+```
+Real-world demo re-run: disclaimer displayed, 1 warning (20.0x resolution mismatch, as expected),
+prediction unchanged from Phase 11 (1621/65536 px, 2.47%, 19 regions)
+Dashboard: 0 top-level exceptions (streamlit.testing.v1.AppTest), HTTP 200 on a live server
+```
+
+**TESTS:**
+- `pytest tests/test_realworld_validation.py -v`: 11/11 passed.
+- `pytest tests/`: 181/181 passed (170 from Phase 21 + 11 new).
+
+**DOCUMENTATION UPDATED:**
+- `docs/LIMITATIONS.md` — new Phase 22 section, "Not implemented" section narrowed to the honest
+  remaining gap.
+- `README.md` — new "Real-World Pipeline Hardening" section.
+- `DEVELOPMENT_LOG.md` — this entry.
+
+**KNOWN LIMITATIONS:**
+- Registration-offset estimation is a diagnostic only — no correction/alignment is performed, and
+  phase correlation itself can be fooled by real large-scale change between the two images (not
+  only by misregistration), so a flagged pair is not necessarily misaligned and an unflagged pair
+  is not guaranteed to be perfectly aligned.
+- The cloud/bright-region screen is explicitly a heuristic (brightness + low saturation), not a
+  validated cloud detector — stated in every warning it produces, not just in this document.
+- No full browser-based (Playwright) dashboard walkthrough was performed this phase — see
+  "Experiments run" above for the substitute verification actually performed and why.
+- None of Phase 22's checks validate prediction *accuracy* — they validate input characteristics
+  only; no ground truth exists for arbitrary real-world uploads, so no accuracy claim is made.
+
+**NEXT PHASE:**
+- PHASE 23 — Final Unified Dashboard + Comprehensive Final Report. Proceeding automatically per
+  the standing autonomous authorization. This is the final phase specified in the mega-prompt.
+
+---
+
 ## PHASE 21 — Multi-Temporal Change Analysis
 
 **Date:** 2026-08-25

@@ -21,6 +21,7 @@ from src.analysis.area import levir_cd_effective_pixel_size
 from src.analysis.statistics import compute_change_statistics
 from src.analysis.severity import compute_severity_for_regions, highest_severity_regions, severity_distribution
 from src.inference.predict import Predictor
+from src.realworld.validation import REAL_WORLD_DISCLAIMER, validate_real_world_input
 from src.visualization.overlays import create_overlay, create_region_id_overlay
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -192,6 +193,29 @@ if before_file and after_file:
     after_img = load_image_from_upload(after_file)
 
     if before_img is not None and after_img is not None:
+        st.warning(f"**{REAL_WORLD_DISCLAIMER}**", icon="⚠️")
+        validation_report = validate_real_world_input(before_img, after_img)
+        if validation_report["warnings"]:
+            with st.expander(
+                f"Input validation: {len(validation_report['warnings'])} warning(s) found "
+                f"(Phase 22 — real, computed checks, not a validated accuracy estimate)",
+                expanded=True,
+            ):
+                for w in validation_report["warnings"]:
+                    st.write(f"- {w}")
+                reg = validation_report["registration"]
+                if reg["estimated_shift_magnitude_px"] is not None:
+                    st.caption(
+                        f"Estimated registration offset: {reg['estimated_shift_magnitude_px']} px "
+                        f"(phase-correlation estimate, not corrected)."
+                    )
+        else:
+            st.caption(
+                "Input validation (Phase 22): dimensions match, no large estimated registration "
+                "offset, no unusually bright/washed-out regions detected. This does NOT confirm "
+                "prediction accuracy — see the disclaimer above."
+            )
+
         if not checkpoint_exists:
             st.warning("Cannot run inference: the selected model's checkpoint is missing (see sidebar).")
         elif st.button("Detect Changes", type="primary"):
@@ -327,8 +351,13 @@ st.markdown(
 | Region-level intelligence (geometry, prediction probability per region, region-ID overlay) | **Implemented** — see `docs/EVALUATION.md` Phase 16 |
 | Region severity scoring | **Implemented** — analytical score only, NOT ground truth (see `src/analysis/severity.py`, docs/EVALUATION.md Phase 17) |
 | Change-type classification (road/vegetation/water/etc.) | **Not implemented** — no such labels in training data |
+| Geospatial analysis (real polygons, area, GeoJSON/map export) | **Implemented** — real georeferenced Sentinel-2 imagery only, see `docs/EVALUATION.md` Phase 18 |
+| Multi-temporal (>2 date) analysis | **Implemented** — independent per-interval detections, no tracking/causal claims, see `docs/EVALUATION.md` Phase 21 |
+| Multi-class / damage-severity change detection | **Not implemented** — no suitable dataset could be reliably obtained this session, see `docs/LIMITATIONS.md` Phase 19 |
+| Transformer-based architecture | **Implemented as a research comparison only** — underperforms the CNN model, see `docs/EXPERIMENTS.md` Phase 20 |
 | Verified real-world (non-LEVIR-CD) imagery support | **Experimental / not verified** — see `docs/LIMITATIONS.md` and Phase 11 |
-| Cloud/shadow/registration-error detection | **Not implemented** |
+| Upload-time input validation (dimension match, estimated registration offset, bright/cloud-like-pixel heuristic) | **Implemented** — real, computed diagnostic checks; NOT a validated accuracy estimate, see Phase 22 |
+| Cloud/shadow detection | **Heuristic only** — a simple brightness/saturation screen, not a validated cloud detector (Phase 22) |
 | Formal probability calibration (e.g. temperature scaling) | **Not implemented** — "prediction probability" is a raw sigmoid output only |
 """
 )

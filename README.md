@@ -324,6 +324,20 @@ independent intervals: 1-3 regions and 2.86-7.20 ha detected-change area per int
 table and the "not a trend line" caveat: [`docs/EVALUATION.md`](docs/EVALUATION.md), Phase 21
 section). The existing two-image mode (dashboard default) is completely unmodified.
 
+## Real-World Pipeline Hardening
+
+**Implemented (Phase 22).** `src/realworld/validation.py` adds real, computed input-validation
+checks for arbitrary (non-LEVIR-CD) before/after uploads — surfaced in the dashboard's upload flow
+and `scripts/real_world_demo.py`: a registration-offset estimate (`cv2.phaseCorrelate`, flags
+>3px estimated shift — a diagnostic, not a correction), a resolution-plausibility check (flags
+imagery ≥5x coarser than LEVIR-CD's 0.5 m/pixel training resolution), and an explicitly-heuristic
+cloud/bright-region screen (not a validated cloud detector — see
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md)). The exact required disclaimer — **"Model trained on
+LEVIR-CD imagery. Performance on this imagery has not been independently validated."** — is
+displayed wherever real-world imagery is processed. None of this validates prediction accuracy;
+it only surfaces honest signals about the input. The offline/local-file upload path is unchanged
+and still works without network access.
+
 ## Limitations
 
 **Finalized (Phase 12).** Full account in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): dataset
