@@ -247,9 +247,18 @@ are in [`docs/TRAINING.md`](docs/TRAINING.md) and `DEVELOPMENT_LOG.md` (Phase 13
 
 **Implemented (Phase 8).** 5 real experiments compared on identical data/training protocol:
 baseline U-Net, Siamese U-Net (`diff`/`concat`/`diff_concat` comparison modes), and Siamese +
-Attention (`diff_concat`, the winner). Full comparison table, ablation interpretation, and the
-documented justification for deferring a Transformer variant and hyperparameter search:
+Attention (`diff_concat`, the winner). Full comparison table and ablation interpretation:
 [`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md).
+
+**Phase 20 built the Transformer variant Phase 8 deferred, and measured it for real.**
+`models/transformer_change.py` — a genuine self-attention encoder (`nn.TransformerEncoder`) Siamese
+architecture — trained under the identical 30-epoch protocol as the 5 CNN models above, for a fair
+comparison. **Result, reported honestly: it loses.** Test IoU=0.3575, well below even the weakest
+CNN variant (`diff`, IoU=0.5569) — consistent with Vision Transformers needing more data or
+pretraining than this project's 445 training pairs / from-scratch training provide. It does have
+the fewest parameters (4.05M) and fastest inference (3.42 ms/pair) of all 6 models, a real but
+non-decisive tradeoff. Full result table and interpretation:
+[`docs/EXPERIMENTS.md`](docs/EXPERIMENTS.md) (Phase 20 section).
 
 ## Real-World Demonstration
 

@@ -13,6 +13,7 @@ import yaml
 
 from models.losses import get_loss
 from models.siamese_unet import SiameseUNet
+from models.transformer_change import TransformerChangeDetector
 from models.unet import BaselineChangeUNet
 from src.data.dataloader import get_dataloader
 from src.training.trainer import Trainer
@@ -56,6 +57,8 @@ def build_model(config: dict) -> torch.nn.Module:
         return BaselineChangeUNet(base_channels=config["model"].get("base_channels", 32))
     if model_type == "siamese_unet":
         return SiameseUNet(**{k: v for k, v in config["model"].items() if k != "type"})
+    if model_type == "transformer_change":
+        return TransformerChangeDetector(**{k: v for k, v in config["model"].items() if k != "type"})
     raise ValueError(f"Unknown model type: {model_type!r}")
 
 

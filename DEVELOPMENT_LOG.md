@@ -11,6 +11,95 @@ only the "wait for the user between phases" behavior changed.
 
 ---
 
+## PHASE 20 — Transformer-Based Architecture (Research Comparison)
+
+**Date:** 2026-08-25
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `models/transformer_change.py` (`TransformerChangeDetector`, `TransformerEncoder`,
+  `PatchEmbed`, `DecoderBlock`): a genuinely self-attention-based Siamese change-detection
+  architecture — `nn.TransformerEncoder` (multi-head self-attention, learnable positional
+  embedding, global receptive field from the first layer) as a shared-weight encoder for both
+  before/after images, feature comparison reused from `models/siamese_unet.py`
+  (`compare_features`/`comparison_channels`, Rule 6), decoded back to full resolution with
+  transposed-convolution blocks. This is the Transformer variant Phase 8 explicitly deferred
+  (`docs/EXPERIMENTS.md` "Why the Transformer variant was not implemented this phase") — now
+  actually built and measured, as a **research comparison only**, never replacing the Siamese
+  U-Net + Attention model, which remains this project's primary result.
+- `configs/transformer.yaml`: trains under the *exact same* controlled protocol as Phase 8's
+  original 5-architecture comparison (30 epochs, Adam lr=1e-4, BCE+Dice loss, batch size 8, image
+  size 256, seed 42) for a fair, unconfounded comparison.
+- `src/training/train.py`: `build_model()` gained a `"transformer_change"` branch; new import.
+- `scripts/architecture_comparison.py`: measures parameters and inference time (batch=1, 5 warmup
+  + 50 timed forward passes, CUDA-synchronized) for **all 6** architectures under one identical
+  procedure — inference time had never previously been measured for any model in this project.
+  Test-set accuracy metrics are read from each model's existing real `*_test_metrics.json` (not
+  re-run, to avoid changing already-reported numbers via Phase 6's documented GPU
+  non-determinism).
+- `tests/test_transformer_change.py`: 10 new tests (token-count correctness, shared-weight
+  verification, invalid-config errors, forward-pass shape for all 3 comparison modes, backward/
+  optimizer-step correctness, before/after order-sensitivity, encoder weight-sharing).
+- `docs/EXPERIMENTS.md`: new "Phase 20" section (protocol, full 6-way comparison table, honest
+  interpretation of the losing result, what would likely be needed to close the gap).
+
+**FILES CREATED:**
+- `models/transformer_change.py`, `configs/transformer.yaml`, `scripts/architecture_comparison.py`,
+  `tests/test_transformer_change.py`
+
+**FILES MODIFIED:**
+- `src/training/train.py`, `docs/EXPERIMENTS.md`, `README.md`
+
+**EXPERIMENTS RUN (real, on actual LEVIR-CD data):**
+1. `python -m src.training.train --config configs/transformer.yaml` — 30 epochs, real training,
+   889.5s (14.8 min) on the project's NVIDIA RTX 4050 Laptop GPU. Best epoch 27 (val IoU=0.3386);
+   not early-stopped (no early stopping configured for this controlled-comparison run, matching
+   Phase 8's protocol) — still slowly improving at epoch 30, unlike the CNN runs' earlier
+   convergence.
+2. `python -m src.evaluation.evaluate --config configs/transformer.yaml --checkpoint
+   outputs/checkpoints/transformer_change_diff_concat/best.pt` — real held-out test-set evaluation.
+3. `python scripts/architecture_comparison.py` — real parameter counts + inference timing for all
+   6 models (the 5 Phase 8 CNN checkpoints + the new Transformer), one identical procedure.
+
+**RESULTS (actual, measured — full data: `outputs/metrics/{transformer_change_diff_concat_test_metrics,architecture_comparison}.json`):**
+```
+Transformer (diff_concat): 4,054,481 params, 3.42 ms/pair inference (fastest, fewest params of all 6)
+Test IoU=0.3575, Dice=0.5267, Precision=0.4774, Recall=0.5872, F1=0.5267, Accuracy=0.9462
+```
+**Substantially underperforms every CNN architecture**, including the weakest one (Siamese `diff`,
+IoU=0.5569, from Phase 8). Reported honestly, as obtained — no post-hoc tuning was applied after
+seeing this result. Consistent with the well-documented property that Vision Transformers lack
+CNNs' spatial inductive biases and need more data or pretraining than this project's 445 from-
+scratch training pairs provide — exactly the risk Phase 8's original deferral reasoning
+anticipated, now confirmed by measurement rather than predicted.
+
+**TESTS:**
+- `pytest tests/test_transformer_change.py -v`: 10/10 passed.
+- `pytest tests/`: 162/162 passed (152 from Phase 18/19 + 10 new).
+
+**DOCUMENTATION UPDATED:**
+- `docs/EXPERIMENTS.md` — new Phase 20 section.
+- `README.md` — Experiments section extended with the honest Phase 20 result.
+- `DEVELOPMENT_LOG.md` — this entry.
+
+**KNOWN LIMITATIONS:**
+- Single run/seed (42), same as every other experiment in this project — no variance estimate.
+- No pretrained backbone was used or is available in this codebase's infrastructure — the single
+  largest known lever for closing the gap was not attempted, and is documented as such rather than
+  implied to be equivalent to a "true Transformer ceiling" result.
+- Single-scale patch-grid Transformer (no hierarchical/Swin-style multi-scale design) — a
+  materially larger implementation was out of scope for a research-comparison phase.
+- Exact Phase 8 per-model training time was not recorded at the time it was run; only the
+  Transformer's own training time (889.5s) is exactly measured here, not a like-for-like training-
+  time comparison across all 6 — reported honestly as a gap, not backfilled with an estimate.
+
+**NEXT PHASE:**
+- PHASE 21 — Multi-Temporal Analysis. Proceeding automatically per the standing autonomous
+  authorization.
+
+---
+
 ## PHASE 19 — Multi-Class Change Detection
 
 **Date:** 2026-08-25

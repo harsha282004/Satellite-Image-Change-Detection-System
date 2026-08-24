@@ -320,3 +320,89 @@ validation IoU (never the test set) and confirmed by held-out test evaluation.
   literature-reasonable parameter setting, not a range (`docs/EXPERIMENTS.md` Phase 14.2
   limitations) — it remains possible a different `pos_weight` or Tversky `alpha`/`beta` could
   close some of the gap to BCE+Dice.
+
+---
+
+## Phase 20 — Transformer-Based Architecture (Research Comparison)
+
+**Status: Implemented and run.** The Transformer variant deferred in Phase 8 (justification above:
+dataset size, no evidence of a CNN failure mode) is now actually built and measured — the
+deferral was a scope decision for that phase, not a permanent one, and Phase 20 exists specifically
+to replace that reasoning with a real result. `models/transformer_change.py`
+(`TransformerChangeDetector`) implements a genuinely self-attention-based Siamese encoder
+(`nn.TransformerEncoder`, patch embedding + learnable positional embedding, global receptive field
+from the first layer) feeding a transposed-convolution decoder — see the module docstring for the
+full architecture diagram. **This model is a research comparison only; it never replaces the
+Siamese U-Net + Attention model, which remains this project's primary result** (`README.md`
+"Results").
+
+### Protocol
+Trained under the *exact same controlled recipe* as Phase 8's original 5-architecture comparison
+above — 30 epochs, Adam (lr=1e-4), BCE+Dice loss, batch size 8, image size 256, seed 42, same
+train/val/test split, same GPU — so the result is a fair architecture comparison, not confounded by
+a different training budget (`configs/transformer.yaml`). Parameters and inference time for **all
+six** architectures (the original 5 plus the Transformer) were freshly measured together, under one
+identical procedure, by `scripts/architecture_comparison.py` (batch=1, 5 warmup + 50 timed forward
+passes, CUDA-synchronized) — inference time had never previously been measured for any model in
+this project.
+
+### Real, measured result
+
+| Architecture | Params | Inference (ms/pair) | Test IoU | Test Dice | Test Precision | Test Recall | Test F1 | Test Accuracy |
+|---|---|---|---|---|---|---|---|---|
+| Baseline U-Net | 7,763,905 | 4.30 | 0.6234 | 0.7680 | 0.7333 | 0.8062 | 0.7680 | 0.9752 |
+| Siamese U-Net (`diff`) | 7,763,041 | 5.52 | 0.5569 | 0.7154 | 0.8004 | 0.6468 | 0.7154 | 0.9738 |
+| Siamese U-Net (`concat`) | 10,709,345 | 7.09 | 0.6351 | 0.7768 | 0.7077 | 0.8609 | 0.7768 | 0.9748 |
+| Siamese U-Net (`diff_concat`) | 14,704,225 | 8.38 | 0.6442 | 0.7836 | 0.7982 | 0.7695 | 0.7836 | 0.9784 |
+| **Siamese U-Net + Attention (`diff_concat`)** | 15,428,125 | 10.40 | **0.6560** | **0.7922** | 0.8018 | 0.7829 | **0.7922** | **0.9791** |
+| Transformer (`diff_concat`) | **4,054,481** | **3.42** | 0.3575 | 0.5267 | 0.4774 | 0.5872 | 0.5267 | 0.9462 |
+
+(This table uses the Phase 8 30-epoch-budget checkpoints for the 5 CNN models, matching the
+Transformer's own 30-epoch budget — not the Phase 13 100-epoch-trained model, which used a longer,
+separately-justified training strategy and is not a fair same-budget comparison point here.)
+
+### Interpretation — honest, including the losing result
+
+**The Transformer substantially underperforms every CNN architecture, including the weakest one
+(`diff`, IoU=0.5569).** Test IoU=0.3575 is roughly 45% lower (relative) than the best CNN result.
+Its validation curve (`outputs/checkpoints/transformer_change_diff_concat/` training log) was still
+climbing at epoch 27-30 with no sign of having converged, unlike the CNN runs — consistent with the
+well-documented property that Vision Transformers lack CNNs' built-in spatial inductive biases
+(locality, translation equivariance) and need either substantially more training data or
+large-scale pretraining to compensate, neither of which is available here (445 training pairs,
+trained from random initialization, no pretrained backbone). This is exactly the risk Phase 8's
+original deferral reasoning anticipated — now confirmed by an actual measurement rather than
+predicted from first principles.
+
+**Two genuinely favorable properties, despite the accuracy gap:** the Transformer has the **fewest
+parameters** of all 6 models (4.05M vs. 7.76M-15.43M) and the **fastest inference** (3.42 ms/pair,
+faster even than the baseline). Global self-attention over a coarse 16x16 token grid is
+computationally cheaper here than the CNN decoders' multiple full-resolution skip-connection
+convolutions. This does not offset the large accuracy gap for this project's use case, but it is a
+real, measured tradeoff worth recording rather than omitting because the headline result is a loss.
+
+**This result is reported as obtained — it was not expected to win, and it did not.** No
+architecture change, extra training budget, or hyperparameter adjustment was applied to the
+Transformer after seeing this result; doing so would make this an unfair comparison against the
+CNN architectures' own single fixed-recipe evaluations above.
+
+### What would likely be needed to close the gap (not attempted — out of scope here)
+- A pretrained backbone (e.g. ImageNet-pretrained ViT weights) — this project has no
+  infrastructure for loading/fine-tuning external pretrained weights.
+- Substantially more training data than LEVIR-CD's 445 training pairs, or heavy data augmentation
+  beyond what `src/data/preprocessing.py` currently applies.
+- A hierarchical/multi-scale Transformer design (e.g. Swin-style patch merging) to recover the
+  multi-scale skip connections the CNN U-Net decoders benefit from — a materially larger
+  implementation than the single-scale encoder built here.
+
+### Status
+- [x] Transformer-based Siamese change detector implemented (`models/transformer_change.py`,
+      10 tests in `tests/test_transformer_change.py`)
+- [x] Trained under the identical Phase 8 protocol for a fair comparison
+- [x] Compared against all 5 prior architectures on IoU/Dice/Precision/Recall/F1/Accuracy/
+      parameters/inference time (`scripts/architecture_comparison.py`,
+      `outputs/metrics/architecture_comparison.json`)
+- [x] Result reported honestly (the Transformer performs worse) — no result-shopping
+- Exact Phase 8 per-model training time was not recorded at the time (only an approximate
+  "~25 min each" ballpark exists for Phase 4/5 in `README.md`); the Transformer's own training
+  time **was** measured this session: 889.5s (14.8 min) for 30 epochs, best epoch 27.

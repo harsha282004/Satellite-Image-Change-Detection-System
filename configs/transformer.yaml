@@ -1,0 +1,34 @@
+# Phase 20 research comparison: a genuinely Transformer-based (self-attention encoder) Siamese
+# change detector, trained under the exact same controlled protocol as Phase 8's original 5-model
+# architecture comparison (30 epochs, Adam lr=1e-4, BCE+Dice loss, batch size 8, image size 256,
+# seed 42) so the result is a fair architecture comparison, not confounded by a different training
+# budget — same reasoning as docs/EXPERIMENTS.md "Why a formal hyperparameter search was not run".
+extends: config.yaml
+
+experiment_name: transformer_change_diff_concat
+
+model:
+  type: transformer_change
+  embed_dim: 256
+  patch_size: 16
+  image_size: 256
+  num_layers: 4
+  num_heads: 8
+  mlp_ratio: 4.0
+  dropout: 0.1
+  comparison_mode: diff_concat
+
+dataset:
+  root: data/raw/levir_cd
+  image_size: 256
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+
+training:
+  epochs: 30
+  learning_rate: 0.0001
+  optimizer: adam
+  loss: bce_dice
+  seed: 42
