@@ -11,6 +11,93 @@ only the "wait for the user between phases" behavior changed.
 
 ---
 
+## PHASE 23 — Final Unified Dashboard
+
+**Date:** 2026-08-25
+
+**STATUS:** COMPLETED — final phase of the Phase 13-23 mega-spec.
+
+**IMPLEMENTED:**
+- `dashboard/app.py`: restructured into 5 tabs, integrating every prior phase's UI-facing
+  capability into one cohesive app (per the exact Phase 23 requirement list):
+  - **Project Overview** — a "deterministic summary" (explicitly labeled and explained: every
+    number is loaded from a saved `outputs/metrics/*.json` file, never recomputed live) of the
+    best model's real test metrics, plus a phase-completion table.
+  - **Live Detection** — the full existing upload/validate/predict/stats/region/severity flow
+    (Phases 9, 15-17, 22), unchanged in behavior, now with a new **Exports** section (region table
+    CSV, full statistics JSON via `st.download_button`).
+  - **Model Comparison** — the real Phase 20 6-architecture table (loaded from
+    `outputs/metrics/architecture_comparison.json`) plus the Phase 13 training-strategy table.
+  - **Geospatial & Multi-Temporal** — embeds the most recent real `outputs/geospatial/
+    region_map.html` (via `st.iframe` — not the deprecated `st.components.v1.html`) with a
+    GeoJSON download button, and the most recent real `outputs/multitemporal/temporal_report.json`
+    table + chart, with the no-causal-claims warning repeated prominently.
+  - **Failure Cases & Limitations** — the real, already-documented Phase 8 false-positive failure
+    case (text + the current best model's real prediction-grid image), with an explicit note that
+    the specific failure was observed on the Phase 8 checkpoint and is not separately re-verified
+    for the current Phase 13 Experiment C checkpoint (no unverified claim of an identical failure).
+  - Model selector (sidebar) extended from 7 to 8 entries — added the Phase 20 Transformer as a
+    selectable model, labeled "research comparison — underperforms".
+  - Capabilities table extended with a "Region-table and geospatial GeoJSON export" row.
+  - A top-level "Scientific disclaimer" panel now appears once, above all tabs, consolidating the
+    benchmark-only / unvalidated-uploads / severity-not-ground-truth / no-tracking-claims points
+    that were previously scattered only within individual result sections.
+- `tests/test_dashboard_app.py` (new): 4 tests using Streamlit's official in-process
+  `streamlit.testing.v1.AppTest` harness — no top-level exceptions on a real script execution, all
+  5 tabs render, the scientific disclaimer is present, and the model selectbox has all 8 options
+  including the Transformer. This makes the dashboard verification method introduced ad hoc in
+  Phase 22 a permanent, repeatable part of the test suite.
+
+**FILES CREATED:**
+- `tests/test_dashboard_app.py`
+
+**FILES MODIFIED:**
+- `dashboard/app.py` (substantial restructuring — see above; every previously-existing behavior
+  preserved, nothing removed), `README.md`
+
+**EXPERIMENTS RUN (real verification, no new model training — this phase integrates, not trains):**
+1. Streamlit's official in-process `AppTest` harness run directly against the restructured
+   `dashboard/app.py` — 0 top-level exceptions, 5 tabs confirmed rendering.
+2. A live local Streamlit server launched fresh (after killing the prior Phase 22 verification
+   server) and confirmed responding HTTP 200.
+3. Full test suite re-run after the restructuring to confirm zero regressions in any prior phase's
+   code (the dashboard changes touch no `src/`, `models/`, or `scripts/` files).
+
+**RESULTS (actual, measured):**
+```
+tests/test_dashboard_app.py: 4/4 passed
+Full suite: 185/185 passed (181 from Phase 22 + 4 new)
+Live server: HTTP 200
+```
+
+**TESTS:**
+- `pytest tests/test_dashboard_app.py -v`: 4/4 passed.
+- `pytest tests/`: 185/185 passed.
+
+**DOCUMENTATION UPDATED:**
+- `README.md` — "Dashboard" section rewritten to describe all 5 tabs.
+- `DEVELOPMENT_LOG.md` — this entry.
+
+**KNOWN LIMITATIONS:**
+- The Geospatial and Multi-Temporal tabs display the most recent *real* run of their respective
+  scripts, loaded from disk — they are not live, interactive re-analyses triggered from the
+  dashboard itself (both require live network access to Sentinel-2 data, which the dashboard does
+  not initiate on its own, consistent with the offline/local-imagery-support requirement).
+- The Failure Cases tab shows a real, previously-documented finding rather than a live search for
+  new failure cases on every page load — a live systematic failure-case search across the full
+  test set was out of scope for this integration phase.
+- No full browser-based Playwright walkthrough was performed for this restructuring, for the same
+  reason documented in Phase 22 (no working Playwright/Node install in this session's scratchpad,
+  high cost at this session's measured network throughput) — `AppTest` plus a live-server HTTP
+  check were used instead, and are now a permanent regression test.
+
+**NEXT PHASE:**
+- None — this is the final phase (23) of the Phase 13-23 mega-spec. Final verification (regression
+  checks, checkpoint/metrics integrity, comprehensive final report per the user's exact specified
+  structure) follows immediately, per the standing autonomous authorization.
+
+---
+
 ## PHASE 22 — Real-World Pipeline Hardening
 
 **Date:** 2026-08-25

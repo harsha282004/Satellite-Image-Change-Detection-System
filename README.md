@@ -171,20 +171,33 @@ about) correctly yielded only 3 tiny regions covering 0.05% of the tile.
 
 ## Dashboard
 
-**Implemented (Phase 10).**
+**Implemented (Phase 10), unified into one final dashboard (Phase 23).**
 
 ```bash
 python -m streamlit run dashboard/app.py
 ```
 
-Upload a before/after image pair, select any of the 5 trained models (sidebar shows that model's
-real, measured benchmark metrics — not simulated), and click "Detect Changes" to run real
-inference: predicted mask, overlay, region count, percent/area changed, and a full per-region
-table. Verified end-to-end in a real browser (Playwright): model switching, image upload, live
-inference producing results matching `scripts/analyze_predictions.py`'s output exactly for the
-same test image, and graceful error handling for an invalid uploaded file. The "Capabilities"
-table on the page states plainly what is and isn't implemented (e.g. no change-type
-classification, no verified real-world-imagery support) — nothing is faked or implied.
+Five tabs integrate every phase's UI-facing work into one cohesive app:
+- **Project Overview** — a deterministic (disk-loaded, never live-recomputed) summary of the best
+  model's real test metrics and every phase's completion status.
+- **Live Detection** — upload a before/after pair, select any of the 8 trained models (7 CNN
+  variants + the Phase 20 Transformer research comparison), real Phase 22 input validation, real
+  inference (mask/probability/overlay), change statistics, region analysis with severity scoring,
+  and CSV/JSON exports.
+- **Model Comparison** — the real, measured 6-architecture comparison table (Phase 8 + Phase 20:
+  parameters, inference time, IoU/Dice/Precision/Recall/F1/Accuracy) and the Phase 13 training-
+  strategy comparison.
+- **Geospatial & Multi-Temporal** — the most recent real `scripts/geospatial_analysis.py` run
+  (interactive map, GeoJSON download) and `scripts/multitemporal_analysis.py` run (per-interval
+  table and chart, with the no-causal-claims warning repeated).
+- **Failure Cases & Limitations** — the real, documented Phase 8 false-positive failure case and a
+  pointer to the complete `docs/LIMITATIONS.md`.
+
+Verified via Streamlit's official in-process `AppTest` harness (`tests/test_dashboard_app.py`, 4
+tests: no top-level exceptions, all 5 tabs render, disclaimer present, model selectbox complete)
+and a live local server (HTTP 200). The "Capabilities" table at the bottom states plainly what is
+and isn't implemented (e.g. no change-type classification, no verified real-world-imagery support,
+no multi-class detection) — nothing is faked or implied.
 
 ## Results
 
