@@ -271,6 +271,30 @@ resolution-gap analysis, and an honest discussion of what this does and does not
 [`docs/REAL_WORLD_DEMO.md`](docs/REAL_WORLD_DEMO.md). Do not read this section's qualitative
 result as equivalent in validity to the benchmark numbers in "Results" above.
 
+## Geospatial Change Intelligence
+
+**Implemented (Phase 18).** Extends the real-world Sentinel-2 demonstration above from
+image-space analysis (pixel coordinates only, no CRS — true of every LEVIR-CD PNG) to genuine
+geospatial analysis: `src/geospatial/raster.py::fetch_georeferenced_crop()` fetches a real GeoTIFF
+that preserves its native CRS/affine transform (read with `rasterio`), and a hard guard
+(`has_georeference()`) refuses to run geospatial conversion on any raster that isn't genuinely
+georeferenced — no invented coordinates. `src/geospatial/polygons.py` converts detected pixel
+regions into real geographic polygons and real-world area in m²/hectares (`polygon_area_m2`, which
+raises rather than computing area in a geographic/degree CRS) and reprojects to WGS84 for GeoJSON
+export. Outputs: `regions.geojson`, `regions.csv`, `regions.gpkg` (GeoPackage), and an interactive
+Folium map (`region_map.html`) with per-region popups.
+
+```bash
+python scripts/geospatial_analysis.py
+```
+
+Real measured result on the same Pflugerville, TX pair as Phase 11: raster 583x561 px at
+10.0 m/pixel (EPSG:32614), **6 regions detected, 30.89 hectares total detected-change area**
+(computed from the raster's actual UTM projection). Same caveats as the Phase 11 demonstration
+apply in full — no ground truth exists for this pair, so this is a real, unforced measurement, not
+a validated accuracy figure. Full results table and pipeline details:
+[`docs/EVALUATION.md`](docs/EVALUATION.md) (Phase 18 section).
+
 ## Limitations
 
 **Finalized (Phase 12).** Full account in [`docs/LIMITATIONS.md`](docs/LIMITATIONS.md): dataset

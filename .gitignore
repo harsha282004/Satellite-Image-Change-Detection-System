@@ -69,5 +69,8 @@ outputs/env_freeze.txt
 # Real-world demo outputs (regenerable via scripts/real_world_demo.py, requires network access)
 outputs/real_world_demo/
 
+# Geospatial analysis outputs (regenerable via scripts/geospatial_analysis.py, requires network access)
+outputs/geospatial/
+
 # Logs
 *.log

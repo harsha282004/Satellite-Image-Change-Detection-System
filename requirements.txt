@@ -29,8 +29,14 @@ streamlit==1.62.0
 # Geospatial (introduced in Phase 11, for real-world Sentinel-2 access)
 rasterio==1.5.1
 pystac-client==0.9.0
-# geopandas / shapely / folium: not needed yet (no vector polygon export or interactive map
-# built so far) - add only if a future phase genuinely requires them.
+# Geospatial vector/mapping (added in Phase 18, for real polygon/area export and interactive maps)
+shapely==2.1.2
+pyproj==3.7.2
+geopandas==1.1.4
+pyogrio==0.13.0
+folium==0.20.0
+branca==0.8.2
+xyzservices==2026.3.0
 
 # Utilities
 python-dotenv==1.2.3

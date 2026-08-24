@@ -56,3 +56,58 @@ def fetch_visual_crop(item, bbox_wgs84: List[float]) -> np.ndarray:
         window = from_bounds(minx, miny, maxx, maxy, transform=src.transform)
         data = src.read([1, 2, 3], window=window)
     return np.transpose(data, (1, 2, 0))
+
+
+def fetch_georeferenced_crop(item, bbox_wgs84: List[float], out_path: str) -> str:
+    """Like `fetch_visual_crop`, but writes the windowed crop to a real local GeoTIFF at
+    `out_path`, preserving the source's actual CRS and affine transform (Phase 18) — this is what
+    makes the pixel-to-geographic-coordinate conversion in `src/geospatial/polygons.py` valid: the
+    saved file's own `.transform`/`.crs` are read back by rasterio, not reconstructed or guessed.
+    Returns `out_path`."""
+    visual_url = item.assets["visual"].href
+    with rasterio.open(visual_url) as src:
+        minx, miny, maxx, maxy = transform_bounds("EPSG:4326", src.crs, *bbox_wgs84)
+        window = from_bounds(minx, miny, maxx, maxy, transform=src.transform)
+        data = src.read([1, 2, 3], window=window)
+        window_transform = src.window_transform(window)
+
+        profile = src.profile.copy()
+        profile.update({
+            "height": data.shape[1],
+            "width": data.shape[2],
+            "transform": window_transform,
+            "count": 3,
+            "driver": "GTiff",
+        })
+
+        with rasterio.open(out_path, "w", **profile) as dst:
+            dst.write(data)
+
+    return out_path
+
+
+def has_georeference(raster_path: str) -> bool:
+    """True only if `raster_path` has both a real CRS and a non-identity affine transform — the
+    guard used everywhere in this project to refuse geospatial analysis on plain PNG/JPEG images
+    (LEVIR-CD, or any arbitrary upload) rather than inventing coordinates for them (Phase 18's
+    explicit requirement)."""
+    with rasterio.open(raster_path) as src:
+        return src.crs is not None and not src.transform.is_identity
+
+
+def read_raster_metadata(raster_path: str) -> dict:
+    """CRS, transform, bounds, resolution, width, height for a real georeferenced raster
+    (Phase 18.1). Raises via `has_georeference`'s check being the caller's responsibility — this
+    function reports what it finds, including `crs=None` for a non-georeferenced file, rather than
+    silently fabricating a CRS."""
+    with rasterio.open(raster_path) as src:
+        return {
+            "crs": str(src.crs) if src.crs else None,
+            "transform": list(src.transform)[:6],
+            "bounds": tuple(src.bounds) if src.crs else None,
+            "resolution_x": abs(src.transform.a),
+            "resolution_y": abs(src.transform.e),
+            "width": src.width,
+            "height": src.height,
+            "is_georeferenced": src.crs is not None and not src.transform.is_identity,
+        }

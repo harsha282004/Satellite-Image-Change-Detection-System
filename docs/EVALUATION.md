@@ -398,3 +398,80 @@ directly above it, not just in this document.
 | Severity distribution / highest-severity ranking | **Implemented, measured** |
 | Dashboard severity display with repeated disclaimer | **Implemented** |
 | Severity validated against real damage/impact data | **Not implemented, and not possible** — no such ground truth exists for this task |
+
+## Phase 18 — Geospatial Change Intelligence
+
+**Distinguishing image-space from geospatial analysis, stated once here:** every analysis in
+Phases 15-17 operates on LEVIR-CD PNGs, which carry no coordinate reference system (CRS) — pixel
+coordinates only. This phase is different: it operates on a real, georeferenced Sentinel-2 GeoTIFF
+(the same Pflugerville, TX pair used in [docs/REAL_WORLD_DEMO.md](REAL_WORLD_DEMO.md), Phase 11),
+reads its actual CRS and affine transform from the file with `rasterio`, and converts detected
+regions into real geographic polygons with real-world area — never an assumed pixel size, and
+never an invented coordinate. `src/geospatial/raster.py::has_georeference()` is the hard guard:
+geospatial conversion refuses to run on any raster that isn't genuinely georeferenced (verified by
+`tests/test_geospatial_phase18.py`, which constructs both a real-CRS and a plain/identity-transform
+synthetic raster and checks the guard distinguishes them correctly).
+
+This inherits every caveat already documented in [REAL_WORLD_DEMO.md](REAL_WORLD_DEMO.md): the
+model was trained on LEVIR-CD (0.5 m/pixel); this Sentinel-2 imagery is 10 m/pixel (20x coarser);
+and there is no ground truth for this real-world pair, so predictions here are unvalidated, not a
+benchmark result.
+
+### Pipeline (`src/geospatial/`, run end-to-end by `scripts/geospatial_analysis.py`)
+
+1. `raster.py::fetch_georeferenced_crop()` — fetches a real Sentinel-2 "visual" crop over the STAC
+   item's actual geometry and writes a local GeoTIFF that preserves the source CRS/transform
+   (extends Phase 11's `fetch_visual_crop`, which discarded georeferencing for a plain PNG).
+2. `raster.py::has_georeference()` / `read_raster_metadata()` — verifies and reports the real CRS,
+   affine transform, bounds, and resolution read from the file.
+3. The trained Siamese U-Net + Attention model (`configs/siamese_attention_e100.yaml`) predicts a
+   probability map at its native 256x256 input size; the map is resized back to the raster's native
+   pixel grid before any geospatial conversion, so region pixel coordinates line up with the
+   raster's own transform.
+4. `polygons.py::regions_to_geo_features()` — pixel regions (via Phase 16's `extract_regions`) to
+   `shapely` polygons in the raster's native CRS, to real area in m² (`polygon_area_m2`, which
+   raises rather than computing area in a geographic/degree CRS), to WGS84 for GeoJSON
+   (`polygon_to_wgs84`, via `pyproj.Transformer`). Phase 17 severity scoring is applied per region.
+5. Export: `regions.geojson`, `regions.csv`, `regions.gpkg` (GeoPackage, via `geopandas`), and an
+   interactive `region_map.html` (via `folium`, `maps.py::build_region_map`) with each region drawn
+   as a popup-annotated polygon layer.
+
+### Real, measured result
+
+Run: `venv/Scripts/python.exe scripts/geospatial_analysis.py` (2026-08-25), against the same
+Sentinel-2 items as Phase 11 (`S2A_14RPU_20191206_1_L2A` before, `S2A_14RPU_20241219_0_L2A` after,
+bbox `[-97.6500, 30.4100, -97.5900, 30.4600]`, Pflugerville, TX).
+
+| Property | Value (real, read from the fetched file) |
+|---|---|
+| Raster size | 583 x 561 px |
+| CRS | EPSG:32614 (UTM zone 14N — a projected, metric CRS) |
+| Resolution | 10.0 m/pixel |
+| Threshold used | 0.40 (Phase 15.2's validation-selected threshold) |
+
+| Region ID | Pixels | Area (m²) | Area (ha) | Mean pred. probability | Severity score | Category |
+|---|---|---|---|---|---|---|
+| 3 | 885 | 136,500.0 | 13.65 | 0.9019 | 79.99 | Very High |
+| 4 | 435 | 60,000.0 | 6.00 | 0.7904 | 69.08 | High |
+| 5 | 389 | 52,700.0 | 5.27 | 0.7512 | 64.45 | High |
+| 6 | 275 | 38,000.0 | 3.80 | 0.7512 | 55.20 | High |
+| 1 | 163 | 20,800.0 | 2.08 | 0.7273 | 46.50 | Moderate |
+| 2 | 7 | 900.0 | 0.09 | 0.4424 | 25.50 | Moderate |
+
+6 regions detected; total detected-change area **30.89 ha**, computed from the raster's actual UTM
+14N projection (`polygon_area_m2`), not an assumed pixel size. This is a real, unforced result from
+one real-world pair with no ground truth — not a validated accuracy figure. Outputs are written to
+`outputs/geospatial/` (gitignored, like Phase 11's `outputs/real_world_demo/`, since they require
+live network access to Earth Search/AWS Open Data and are regenerable by re-running the script).
+
+### Phase 18 status summary
+
+| Item | Status |
+|---|---|
+| Real georeferenced GeoTIFF fetch (CRS/transform preserved) | **Implemented, measured** |
+| Georeference guard (refuses to invent coordinates for non-georeferenced imagery) | **Implemented, tested** (11 tests, `tests/test_geospatial_phase18.py`) |
+| Pixel region -> real geographic polygon -> real-world area (m²/ha) | **Implemented, measured** |
+| GeoJSON / CSV / GeoPackage export | **Implemented, measured** |
+| Interactive Folium map with per-region popups | **Implemented, measured** |
+| Severity scoring integrated into geospatial features | **Implemented, measured** |
+| Real-world geospatial accuracy validated against ground truth | **Not implemented, and not possible** — no ground truth exists for this real-world pair (same limitation as Phase 11) |

@@ -11,6 +11,99 @@ only the "wait for the user between phases" behavior changed.
 
 ---
 
+## PHASE 18 — Geospatial Change Intelligence
+
+**Date:** 2026-08-25
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/geospatial/raster.py` (extended): `fetch_georeferenced_crop(item, bbox_wgs84, out_path)`
+  fetches a real Sentinel-2 crop and writes a local GeoTIFF that preserves the source item's actual
+  CRS/affine transform (Phase 11's `fetch_visual_crop` discarded georeferencing — this is a
+  separate function, Phase 11's demo is untouched); `has_georeference(raster_path)` — the hard
+  guard, True only for a real CRS + non-identity transform, refuses geospatial conversion on plain
+  imagery rather than inventing coordinates; `read_raster_metadata(raster_path)` reports real
+  CRS/transform/bounds/resolution/dimensions read from the file.
+- `src/geospatial/polygons.py` (new): `region_bbox_to_polygon()` converts a pixel-space region
+  bounding box to a `shapely` polygon using the raster's real affine transform;
+  `polygon_area_m2()` returns real area in m² for a projected CRS, raises for a geographic
+  (degree) CRS rather than computing a wrong number; `polygon_to_wgs84()` reprojects via
+  `pyproj.Transformer` for GeoJSON's mandated WGS84 output; `regions_to_geo_features()` — the
+  end-to-end pixel-region-to-GeoJSON-feature pipeline, including Phase 17 severity when present;
+  `features_to_geojson()`.
+- `src/geospatial/maps.py` (new): `build_region_map()` builds an interactive Folium map with each
+  detected region as a popup-annotated polygon layer (area, prediction probability, severity, and
+  the standard not-ground-truth disclaimer in every popup); `save_map_html()`.
+- `scripts/geospatial_analysis.py` (new): real end-to-end script — fetches a real georeferenced
+  Sentinel-2 before/after pair (same Pflugerville, TX location/dates as Phase 11), runs the best
+  model (`siamese_attention_e100`), resizes the prediction back to the raster's native pixel grid,
+  converts to real geographic features, exports GeoJSON/CSV/GeoPackage + interactive map. Prints
+  the Phase 11 domain-gap/no-ground-truth caveat at the top of every run.
+- `tests/test_geospatial_phase18.py` (new): 11 tests using synthetic in-memory rasters
+  (`rasterio.open(..., 'w', ...)`) — a real-CRS fixture and a plain/identity-transform fixture,
+  proving the `has_georeference` guard correctly distinguishes them; polygon/area/reprojection
+  correctness against known pixel geometries; end-to-end `regions_to_geo_features` correctness.
+- New dependencies installed: `shapely`, `pyproj`, `geopandas` (+ `pyogrio`), `folium` (+
+  `branca`, `xyzservices`) — added to `requirements.txt`.
+- `docs/EVALUATION.md`: new "Phase 18" section (pipeline, real measured result, status summary),
+  explicitly distinguishing image-space analysis (LEVIR-CD PNGs, no CRS) from this phase's
+  geospatial analysis (real Sentinel-2 GeoTIFF).
+
+**FILES CREATED:**
+- `src/geospatial/polygons.py`, `src/geospatial/maps.py`, `scripts/geospatial_analysis.py`,
+  `tests/test_geospatial_phase18.py`
+
+**FILES MODIFIED:**
+- `src/geospatial/raster.py`, `requirements.txt`, `.gitignore` (added `outputs/geospatial/`,
+  gitignored like `outputs/real_world_demo/` since both require live network access and are
+  regenerable), `docs/EVALUATION.md`, `README.md`
+
+**EXPERIMENTS RUN (real, against live Sentinel-2 data):**
+1. `scripts/geospatial_analysis.py`, run 2026-08-25 against `S2A_14RPU_20191206_1_L2A` (before)
+   and `S2A_14RPU_20241219_0_L2A` (after), bbox `[-97.6500, 30.4100, -97.5900, 30.4600]`
+   (Pflugerville, TX — same location/dates as Phase 11).
+
+**RESULTS (actual, measured — full data: `outputs/geospatial/regions.{geojson,csv}`):**
+```
+Raster: 583x561 px, 10.0 m/pixel, CRS=EPSG:32614 (UTM zone 14N)
+Regions detected: 6
+Total detected-change area: 30.89 ha (from the raster's real UTM projection)
+Severity: 1 Very High, 3 High, 2 Moderate (real scores, range 25.5-79.99)
+```
+A real, unforced result — not tuned. No ground truth exists for this pair (same limitation as
+Phase 11), so this is a measurement, not a validated accuracy figure.
+
+**TESTS:**
+- `pytest tests/test_geospatial_phase18.py -v`: 11/11 passed.
+- `pytest tests/`: 152/152 passed (141 from Phase 17 + 11 new), 4 benign
+  `NotGeoreferencedWarning`s from the intentionally-non-georeferenced test fixture.
+
+**DOCUMENTATION UPDATED:**
+- `docs/EVALUATION.md` — new Phase 18 section.
+- `README.md` — new "Geospatial Change Intelligence" section (after "Real-World Demonstration").
+- `DEVELOPMENT_LOG.md` — this entry.
+
+**KNOWN LIMITATIONS:**
+- No ground truth exists for this real-world pair — same limitation as Phase 11's demonstration,
+  inherited in full, not newly introduced.
+- Only demonstrated on one real-world location/date pair (Pflugerville, TX), not a systematic
+  geospatial evaluation.
+- `outputs/geospatial/` requires live network access to Earth Search/AWS Open Data to regenerate
+  and is gitignored, consistent with `outputs/real_world_demo/`.
+- `pip install` for the new geospatial dependencies was very slow on this session's network
+  (~20-45 min total, `pyogrio`'s wheel alone took ~26 min); all packages installed successfully in
+  the end, no functional issue — noted here only because it dominated this phase's wall-clock time.
+
+**NEXT PHASE:**
+- PHASE 19 — Multi-Class Change Detection. Proceeding automatically per the standing autonomous
+  authorization. First step: inspect/identify a suitable *properly labeled* multi-class change
+  detection dataset — LEVIR-CD's binary labels will not be misused to fabricate classes; if no
+  suitable dataset can be reliably obtained, the limitation will be documented and the project will
+  move on to Phase 20, per the autonomous-execution rules.
+
+---
+
 ## PHASE 17 — Change Severity Analysis
 
 **Date:** 2026-08-25
