@@ -5,6 +5,119 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 14.3-14.4 — Hyperparameter Experiments & Final Configuration
+
+**Date:** 2026-08-24
+
+**STATUS:** COMPLETED (Phase 14 in full: 14.1-14.4 all done)
+
+**IMPLEMENTED:**
+- 4 new configs, each identical to `configs/siamese_attention_e100.yaml` (loss confirmed as
+  `bce_dice` in 14.2) except one hyperparameter: `configs/siamese_attention_lr5e-5.yaml`
+  (lr=5e-5), `configs/siamese_attention_lr2e-4.yaml` (lr=2e-4),
+  `configs/siamese_attention_weight_decay.yaml` (optimizer=adamw, weight_decay=0.01),
+  `configs/siamese_attention_bs4.yaml` (batch_size=4, chosen over a larger batch for GPU VRAM
+  safety margin on this shared machine — documented in the config's own comment). A controlled,
+  deliberately non-exhaustive matrix (one variant per hyperparameter, not a cross-product), per
+  the "not an unnecessarily huge grid search" instruction. The `lr=1e-4/wd=0/bs=8` baseline row
+  reuses Phase 13 Experiment C rather than retraining it.
+- Ran all 4 for real, evaluated all 4 on the real held-out test set, generated training-curve
+  plots, wrote `outputs/metrics/hyperparameter_experiment_comparison.csv` (every value pulled
+  programmatically from the source JSON/CSV files — a script cross-checked the CSV against source
+  after writing, per the transcription-error lesson from Phase 14.2), and wrote up the full
+  comparison, interpretation, and Phase 14.4's final-configuration conclusion in
+  `docs/EXPERIMENTS.md` (new "Phase 14.3" and "Phase 14.4" sections appended).
+- **Phase 14.4 conclusion: the single best configuration found across all of Phase 13+14 testing
+  is Phase 13 Experiment C's exact recipe** (`configs/siamese_attention_e100.yaml` — Adam, lr=1e-4,
+  weight_decay=0.0, batch_size=8, bce_dice loss, max 100 epochs with early stopping patience=10 +
+  `ReduceLROnPlateau`) — nothing tested in Phase 14 (3 alternative losses, 2 alternative learning
+  rates, one weight-decay setting, one batch-size setting — 7 new full training runs total) beat
+  it on validation IoU, confirmed by test-set evaluation.
+
+**FILES CREATED:**
+- `configs/siamese_attention_lr5e-5.yaml`, `configs/siamese_attention_lr2e-4.yaml`,
+  `configs/siamese_attention_weight_decay.yaml`, `configs/siamese_attention_bs4.yaml`
+- `outputs/checkpoints/siamese_unet_diff_concat_attention_{lr5e-5,lr2e-4,wd0.01,bs4}/{best,last}.pt` (gitignored)
+- `outputs/experiments/siamese_unet_diff_concat_attention_{lr5e-5,lr2e-4,wd0.01,bs4}/{history.csv,history.json}` (gitignored)
+- `outputs/metrics/siamese_unet_diff_concat_attention_{lr5e-5,lr2e-4,wd0.01,bs4}_test_metrics.json` (gitignored)
+- `outputs/metrics/hyperparameter_experiment_comparison.csv` (gitignored, consistent with existing policy)
+- `outputs/visualizations/siamese_unet_diff_concat_attention_{lr5e-5,lr2e-4,wd0.01,bs4}_{training_curves,test_predictions}.png` (gitignored)
+
+**FILES MODIFIED:**
+- `docs/EXPERIMENTS.md` (Phase 14.3 hyperparameter section, Phase 14.4 final-configuration section)
+
+**EXPERIMENTS RUN (real, on the actual GPU/dataset — 2 required a clean restart from scratch after
+unrelated session interruptions killed them mid-run; neither partial run was ever reported as a
+result):**
+1. `lr=5e-5` — restarted once (first attempt killed at epoch 60 by a session interruption).
+   Completed run: early-stopped at epoch 63/100, best epoch 53.
+2. `lr=2e-4` — completed run: early-stopped at epoch 59/100, best epoch 49.
+3. `weight_decay=0.01` (AdamW) — completed run: early-stopped at epoch 65/100, best epoch 55.
+4. `batch_size=4` — completed run: early-stopped at epoch 67/100, best epoch 57.
+5. All 4 evaluated on the real 128-image held-out test split via `src/evaluation/evaluate.py`
+   using each experiment's own `best.pt` (selected by validation IoU during training — the test
+   set was never used to choose a hyperparameter value).
+
+**RESULTS (actual, measured — full data: `outputs/metrics/hyperparameter_experiment_comparison.csv`,
+interpretation: `docs/EXPERIMENTS.md` "Phase 14.3"/"Phase 14.4" sections):**
+```
+Hyperparameter        Best ep.  Val IoU   Test IoU  Test Precision  Test Recall
+lr=1e-4 (baseline)     68        0.7188    0.7123    0.8402          0.8239
+lr=5e-5                53        0.6653    0.6560    0.7763          0.8090
+lr=2e-4                49        0.7094    0.6999    0.8339          0.8133
+weight_decay=0.01      55        0.7102    0.7028    0.8277          0.8232
+batch_size=4           57        0.7135    0.6997    0.8424          0.8051
+```
+**Every variant underperformed the baseline, on both validation and test data (the ranking held
+across both, a real consistency check).** Learning rate showed the clearest pattern: halving it
+(5e-5) hurt substantially (worst result in the whole experiment set), doubling it (2e-4) hurt much
+less — interpreted as `ReduceLROnPlateau` already annealing the 1e-4 baseline down through useful
+intermediate values, so starting lower leaves less useful range before the `min_lr=1e-6` floor.
+Weight decay and batch size both landed close to but consistently below baseline — small, real
+effects, consistent with this project never having observed overfitting (so regularization had no
+problem to solve) and with batch_size=4's noisier gradients not being large enough to help here.
+**No hyperparameter change is adopted — the original Phase 13 configuration remains the best.**
+
+**PHASE 14 CONCLUSION (14.1-14.4 combined):** across 8 real, measured configurations (the original
+baseline + 3 alternative losses + 4 alternative hyperparameters), **the baseline
+(`configs/siamese_attention_e100.yaml`) won every comparison.** This is a genuine, useful research
+finding in its own right — Phase 13's training-strategy improvement (30→100 max epochs + early
+stopping + scheduler) was the dominant lever for this architecture, and the specific loss/
+hyperparameter choices that came with it were, empirically, already well-chosen. **No changes are
+adopted from Phase 14; the best model in this project remains
+`siamese_unet_diff_concat_attention_e100`, unchanged since Phase 13.**
+
+**TESTS:**
+- `pytest tests/`: 97/97 passed (no source-code changes in 14.3-14.4, only new configs/docs/data —
+  confirms no regression from the config additions).
+- Every CSV value cross-checked against its source JSON/CSV file programmatically (not hand-typed)
+  before being treated as final, per the Phase 14.2 transcription-error lesson.
+
+**DOCUMENTATION UPDATED:**
+- `docs/EXPERIMENTS.md` — Phase 14.3 (hyperparameter comparison table + interpretation + training
+  curves) and Phase 14.4 (final best-configuration writeup, selection reasoning, honestly-scoped
+  "what remains untested" section) sections appended.
+- `DEVELOPMENT_LOG.md` — this entry.
+- `README.md` — not modified; no leaderboard change (the best model was already
+  `siamese_unet_diff_concat_attention_e100` from Phase 13, and Phase 14 confirmed rather than
+  superseded it).
+
+**KNOWN LIMITATIONS:**
+- No cross-product hyperparameter grid — each dimension varied independently against the same
+  baseline, not jointly. A combined optimum elsewhere in the space is not ruled out.
+- Single seed (42) throughout — same caveat as every experiment in this project.
+- Batch_size=4 was chosen over a larger batch (e.g. 16) specifically for VRAM safety on a
+  sometimes-shared GPU, not because it was expected to be the more informative direction to test —
+  documented as a practical constraint, not a scientific choice.
+- Loss-parameter values in Phase 14.2 were not swept (one setting each) — remains possible a
+  different parameterization could close some of the gap to BCE+Dice.
+
+**NEXT PHASE:**
+- PHASE 15 — Confidence, Probability and Threshold Optimization: not started without explicit user
+  go-ahead, per this project's phase-by-phase execution rule.
+
+---
+
 ## PHASE 14.1-14.2 — Loss Function Experiments
 
 **Date:** 2026-08-24

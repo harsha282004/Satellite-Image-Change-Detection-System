@@ -1,0 +1,38 @@
+# Phase 14.3, hyperparameter experiment: identical to configs/siamese_attention_e100.yaml (the
+# lr=1e-4 baseline, reused as Phase 13 Experiment C / Phase 14 BCE+Dice) except the initial
+# learning rate (5e-5, half the baseline). ReduceLROnPlateau still applies on top of this initial
+# value during training.
+extends: config.yaml
+
+experiment_name: siamese_unet_diff_concat_attention_lr5e-5
+
+model:
+  type: siamese_unet
+  base_channels: 32
+  comparison_mode: diff_concat
+  use_attention: true
+
+dataset:
+  root: data/raw/levir_cd
+  image_size: 256
+
+dataloader:
+  batch_size: 8
+  num_workers: 0
+
+training:
+  epochs: 100
+  learning_rate: 0.00005
+  optimizer: adam
+  weight_decay: 0.0
+  loss: bce_dice
+  seed: 42
+  early_stopping:
+    enabled: true
+    monitor: val_iou
+    patience: 10
+  scheduler:
+    type: reduce_on_plateau
+    factor: 0.5
+    patience: 4
+    min_lr: 1.0e-6
