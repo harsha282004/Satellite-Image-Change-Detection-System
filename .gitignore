@@ -40,11 +40,13 @@ outputs/predictions/*
 outputs/visualizations/*
 outputs/metrics/*
 outputs/experiments/*
+outputs/regions/*
 !outputs/checkpoints/.gitkeep
 !outputs/predictions/.gitkeep
 !outputs/visualizations/.gitkeep
 !outputs/metrics/.gitkeep
 !outputs/experiments/.gitkeep
+!outputs/regions/.gitkeep
 *.pt
 *.pth
 *.ckpt

@@ -259,3 +259,82 @@ rather than only a qualitative concern.
 | Dashboard probability-map display + validated default threshold | **Implemented** |
 | Robustness testing (brightness/contrast/noise/shift) | **Implemented, measured** — found real sensitivity to darkening/contrast/misregistration |
 | Formal probability calibration (reliability diagrams, ECE) | **Not implemented** — explicitly named as a gap, not silently assumed |
+
+---
+
+## Phase 16 — Region-Level Change Intelligence
+
+Converts pixel-level predictions into per-region geometry and statistics — still using the current
+best model (`siamese_unet_diff_concat_attention_e100`).
+
+### 16.1 — Region geometry and prediction-probability fields
+
+`src/analysis/regions.py::extract_regions()` (extended, not duplicated — the Phase 9 function
+gained fields rather than a parallel implementation) now returns, per 8-connected region: `id`,
+`pixel_count`, `centroid`, `bbox`, `width`, `height`, `perimeter` (via `cv2.findContours` +
+`arcLength`), `aspect_ratio` (width/height), `change_density` (pixel_count / bounding-box area —
+1.0 for a solid rectangle, lower for an irregular/sparse shape), and — when a probability map is
+passed in — `mean_prediction_probability` / `max_prediction_probability` from the model's own
+sigmoid output within that region. `src/analysis/statistics.py::compute_change_statistics()` gained
+`smallest_region_pixels`/`smallest_region_area` (previously only largest/average were computed).
+
+**A real correctness lesson from testing, not a bug:** an early test asserted a 6×4-pixel solid
+rectangle has perimeter `2*(6+4)=20`; the actual, correct value is 16. `cv2.arcLength` measures
+along contour points at pixel *centers*, not the outer pixel boundary, so a solid *w*×*h*
+rectangle's perimeter is `2*((w-1)+(h-1))` — the implementation was already correct; the test's
+formula was wrong and was fixed with the reasoning documented inline
+(`tests/test_regions_phase16.py`).
+
+### 16.2 — Noise filtering (documented, not a hidden constant)
+
+`min_region_pixels` (existing parameter, unchanged interface) remains the noise-filtering knob —
+`scripts/export_regions.py --min-region-pixels` (default 4) documents its own reasoning in the
+script's module docstring: at this project's ~2 m/pixel effective ground sampling
+(`src/analysis/area.py`), a region under 4 pixels is under 16 m², below what a model trained at
+this resolution can reliably distinguish from prediction noise at object boundaries. The dashboard
+exposes the same parameter as a user-adjustable sidebar control, not a hard-coded value.
+
+### 16.3 — Region-ID overlays
+
+`src/visualization/overlays.py::create_region_id_overlay()` draws each region's bounding box and
+numeric ID on the image — used both by `scripts/export_regions.py` (saved per-image) and the
+dashboard's new "Region Analysis" section, so a region in the table can be visually located.
+
+### 16.4/16.5 — Dashboard region table and statistics; `outputs/regions/` export
+
+Dashboard "Region Analysis" section: region-ID overlay image, then a table with columns Region,
+Area (px and m²), Prediction Probability (mean and max), Bounding Box, Width×Height — explicitly
+**not** a "Severity" column yet (Phase 17, not implemented — the table caption says so rather than
+adding an empty/placeholder column). Change Statistics gained a "Smallest Region" metric alongside
+the existing Changed Regions/Changed Area/Total Changed Area/Largest Region.
+
+`scripts/export_regions.py` ran for real on 5 test images, saving `outputs/regions/regions.csv`
+(258 region rows), `outputs/regions/regions.json` (full per-image + per-region detail), and
+`outputs/regions/region_ids_*.png` (region-ID overlays) — real, measured output:
+
+| Image | Regions | Largest (px) | Smallest (px) | Average (px) |
+|---|---|---|---|---|
+| test_29.png | 67 | 854 | 4 | 141.9 |
+| test_45.png | 113 | 1450 | 4 | 164.5 |
+| test_52.png | 42 | 322 | 5 | 64.5 |
+| test_75.png | 35 | 491 | 15 | 148.9 |
+| test_99.png | 1 | 41 | 41 | 41.0 |
+
+**Terminology rule enforced everywhere region output appears (code, dashboard, docs):** every
+region is called **"Detected Change Region"** — never "Building", "Road", "Vegetation", or
+"Water". LEVIR-CD provides only binary building-change labels (`docs/DATASET.md`), so this project
+has no basis to assign a semantic category to any region. That distinction is reserved for a
+properly labeled multi-class model (Phase 19), if one is ever added.
+
+### Phase 16 status summary
+
+| Item | Status |
+|---|---|
+| Region geometry (bbox, centroid, width/height/perimeter/aspect ratio/change density) | **Implemented, measured** |
+| Per-region prediction-probability statistics | **Implemented, measured** |
+| Configurable, documented noise filtering | **Implemented** |
+| Region-ID overlay visualization | **Implemented, measured** |
+| Dashboard region table + region-ID overlay | **Implemented** |
+| `outputs/regions/` CSV/JSON export | **Implemented, measured** (5 real images, 258 regions) |
+| Region severity scoring | **Not implemented yet** — Phase 17 |
+| Semantic region classification (Building/Road/etc.) | **Not implemented, and not planned** without a properly labeled multi-class dataset (Phase 19) |

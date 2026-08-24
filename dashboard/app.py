@@ -20,7 +20,7 @@ from PIL import Image, UnidentifiedImageError
 from src.analysis.area import levir_cd_effective_pixel_size
 from src.analysis.statistics import compute_change_statistics
 from src.inference.predict import Predictor
-from src.visualization.overlays import create_overlay
+from src.visualization.overlays import create_overlay, create_region_id_overlay
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -208,7 +208,8 @@ if before_file and after_file:
 
                 pixel_size_m = levir_cd_effective_pixel_size(size)
                 stats = compute_change_statistics(
-                    mask, pixel_size_meters=pixel_size_m, min_region_pixels=min_region_pixels
+                    mask, probability_map=prob_map, pixel_size_meters=pixel_size_m,
+                    min_region_pixels=min_region_pixels
                 )
 
             st.header("2. Results")
@@ -227,7 +228,7 @@ if before_file and after_file:
             )
 
             st.header("3. Change Statistics")
-            m1, m2, m3, m4 = st.columns(4)
+            m1, m2, m3, m4, m5 = st.columns(5)
             m1.metric("Changed Regions", stats["num_regions"])
             m2.metric("Changed Area (% of tile)", f"{stats['percent_changed']:.2f}%")
             m3.metric("Total Changed Area", f"{stats['total_changed_area']['area_hectares']:.4f} ha")
@@ -235,26 +236,47 @@ if before_file and after_file:
                 "Largest Region",
                 f"{stats['largest_region_area']['area_m2']:.0f} m²" if stats["num_regions"] else "—",
             )
+            m5.metric(
+                "Smallest Region",
+                f"{stats['smallest_region_area']['area_m2']:.0f} m²" if stats["num_regions"] else "—",
+            )
             st.caption(
                 f"Area computed at an assumed {pixel_size_m:.2f} m/pixel "
-                f"(src/analysis/area.py::levir_cd_effective_pixel_size — see the capability note above)."
+                f"(src/analysis/area.py::levir_cd_effective_pixel_size — see the capability note above). "
+                f"Regions below {min_region_pixels}px are excluded as noise (sidebar setting)."
             )
 
+            st.header("4. Region Analysis")
+            st.caption(
+                "Every detected region is labeled **\"Detected Change Region\"** — this model was "
+                "trained only on binary building-change labels, so it has no basis to classify "
+                "regions as e.g. \"Building\" or \"Road\" (see docs/DATASET.md)."
+            )
             if stats["regions"]:
-                with st.expander(f"All {stats['num_regions']} detected regions"):
+                region_id_overlay = create_region_id_overlay(after_resized, stats["regions"])
+                st.image(region_id_overlay, caption="Regions labeled by ID (matches table below)", width=500)
+
+                with st.expander(f"All {stats['num_regions']} detected regions", expanded=True):
                     st.dataframe(
                         [
                             {
-                                "region": i + 1,
-                                "pixel_count": r["pixel_count"],
-                                "area_m2": round(r["pixel_count"] * pixel_size_m**2, 1),
-                                "centroid_row": round(r["centroid"][0], 1),
-                                "centroid_col": round(r["centroid"][1], 1),
+                                "Region": r["id"],
+                                "Area (px)": r["pixel_count"],
+                                "Area (m²)": round(r["pixel_count"] * pixel_size_m**2, 1),
+                                "Prediction Probability (mean)": round(r.get("mean_prediction_probability", float("nan")), 3),
+                                "Prediction Probability (max)": round(r.get("max_prediction_probability", float("nan")), 3),
+                                "Bounding Box (row, col)": f"({r['bbox']['min_row']}-{r['bbox']['max_row']}, "
+                                                            f"{r['bbox']['min_col']}-{r['bbox']['max_col']})",
+                                "Width x Height (px)": f"{r['width']} x {r['height']}",
                             }
-                            for i, r in enumerate(stats["regions"])
+                            for r in stats["regions"]
                         ],
                         width="stretch",
                     )
+                st.caption(
+                    "Severity scoring is not yet implemented — see docs/LIMITATIONS.md and the "
+                    "project roadmap for Phase 17."
+                )
             else:
                 st.write("No changed regions detected above the minimum region size.")
 else:
@@ -272,6 +294,8 @@ st.markdown(
 | Real, measured benchmark metrics display | **Implemented** |
 | Prediction probability visualization | **Implemented** — raw sigmoid output, not calibrated confidence |
 | Threshold optimization (validation-set sweep) | **Implemented** — see `docs/EVALUATION.md` Phase 15.2 |
+| Region-level intelligence (geometry, prediction probability per region, region-ID overlay) | **Implemented** — see `docs/EVALUATION.md` Phase 16 |
+| Region severity scoring | **Not implemented yet** — planned Phase 17 |
 | Change-type classification (road/vegetation/water/etc.) | **Not implemented** — no such labels in training data |
 | Verified real-world (non-LEVIR-CD) imagery support | **Experimental / not verified** — see `docs/LIMITATIONS.md` and Phase 11 |
 | Cloud/shadow/registration-error detection | **Not implemented** |

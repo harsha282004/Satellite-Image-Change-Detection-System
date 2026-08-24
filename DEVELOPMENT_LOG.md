@@ -5,6 +5,109 @@ definitions and `DEVELOPMENT_RULES.md` for the verification rules each entry mus
 
 ---
 
+## PHASE 16 — Region-Level Change Intelligence
+
+**Date:** 2026-08-25
+
+**STATUS:** COMPLETED
+
+**IMPLEMENTED:**
+- `src/analysis/regions.py::extract_regions()` extended (not duplicated — Rule 6) with `width`,
+  `height`, `perimeter` (via `cv2.findContours`+`arcLength`), `aspect_ratio`, `change_density`
+  (pixel_count / bbox area), and — when an optional `probability_map` argument is passed —
+  `mean_prediction_probability`/`max_prediction_probability` per region, sourced from the model's
+  real sigmoid output, not a placeholder. Raises a clear `ValueError` on a probability-map/mask
+  shape mismatch.
+- `src/analysis/statistics.py::compute_change_statistics()` gained `smallest_region_pixels`/
+  `smallest_region_area` (previously only largest/average existed) and threads the new
+  `probability_map` parameter through to `extract_regions`. Both changes are backward-compatible
+  (new parameters are optional/keyword, existing keyword-based call sites in `dashboard/app.py`
+  and 3 scripts needed no changes to keep working).
+- `src/visualization/overlays.py::create_region_id_overlay()`: draws each region's bounding box +
+  numeric ID on an image (Phase 16.3), so a region in a table can be visually located.
+- `scripts/export_regions.py`: real run on 5 test images — saves `outputs/regions/regions.csv`
+  (258 region rows), `outputs/regions/regions.json`, and region-ID overlay PNGs. `--min-region-
+  pixels` (default 4) is documented in the script's own docstring (effective ~2m/pixel ground
+  sampling → 4px ≈ 16m², below what this model's training resolution can reliably distinguish
+  from boundary noise) — Phase 16.2's "no unexplained hard-coded value" requirement.
+- `dashboard/app.py`: new "4. Region Analysis" section — region-ID overlay image, then a region
+  table (Region, Area px/m², Prediction Probability mean/max, Bounding Box, Width×Height) with an
+  explicit caption stating severity scoring is not yet implemented (Phase 17) rather than adding
+  an empty/placeholder column; "Change Statistics" gained a "Smallest Region" metric; capability
+  table updated (region intelligence: implemented; severity: not yet). The dashboard's already-
+  computed probability map (Phase 15) is now passed through to `compute_change_statistics`, so the
+  new per-region probability stats come from a real forward pass, not a second one.
+- Every region, everywhere in code/docs/dashboard, is called **"Detected Change Region"** —
+  Phase 16's explicit instruction never to imply a semantic category (Building/Road/etc.) that
+  LEVIR-CD's binary labels don't support.
+- 13 new pytest tests: `tests/test_regions_phase16.py` (9 — geometry correctness on a known solid
+  rectangle and a sparse L-shape, probability-map-present/absent behavior, shape-mismatch error,
+  `smallest_region_pixels` correctness with/without pixel size, probability passthrough),
+  `tests/test_overlays.py` (+4 — region-ID overlay shape/dtype, non-mutation of input, actually
+  draws something, empty-regions no-op).
+- `docs/EVALUATION.md`: new "Phase 16" section (fields added, noise-filtering rationale, region-ID
+  overlays, dashboard table, real `outputs/regions/` export results, status summary).
+
+**FILES CREATED:**
+- `scripts/export_regions.py`
+- `tests/test_regions_phase16.py`
+- `outputs/regions/regions.csv`, `regions.json`, `region_ids_test_{29,45,52,75,99}.png` (gitignored,
+  consistent with existing outputs policy — regenerable via `scripts/export_regions.py`)
+
+**FILES MODIFIED:**
+- `src/analysis/regions.py`, `src/analysis/statistics.py`, `src/visualization/overlays.py`
+- `dashboard/app.py`, `docs/EVALUATION.md`, `README.md`, `tests/test_overlays.py`
+
+**EXPERIMENTS RUN (real, on the actual best model):**
+1. `scripts/export_regions.py` on 5 real test images (`test_29/45/52/75/99.png`), full region
+   geometry + prediction-probability stats computed from real inference output.
+2. Real end-to-end dashboard verification via Playwright (fresh server restart first, per the
+   Phase 15 caching lesson): uploaded a real test image pair, confirmed the region-ID overlay and
+   region table render with no console/page errors, and confirmed (via `[data-testid="stDataFrame"]`
+   widget count, since Streamlit's dataframe grid is canvas-rendered and not plain-text-searchable)
+   that the table is genuinely present, not silently missing.
+
+**RESULTS (actual, measured — full data: `outputs/regions/regions.csv`/`.json`):**
+```
+Image          Regions  Largest(px)  Smallest(px)  Average(px)
+test_29.png    67       854          4             141.9
+test_45.png    113      1450         4             164.5
+test_52.png    42       322          5             64.5
+test_75.png    35       491          15            148.9
+test_99.png    1        41           41            41.0
+```
+258 total regions across 5 images, each with real geometry + prediction-probability statistics.
+
+**TESTS:**
+- `pytest tests/`: 129/129 passed (116 from Phase 15 + 13 new).
+- **A real correctness lesson, caught by testing and fixed in the test, not the code:** the first
+  draft of the solid-rectangle geometry test asserted a 6×4-pixel rectangle has perimeter
+  `2*(6+4)=20`; actual value 16. Root cause: `cv2.arcLength` measures along contour points at
+  pixel *centers*, not the outer pixel boundary, so a solid *w*×*h* rectangle's true perimeter by
+  this convention is `2*((w-1)+(h-1))`. `extract_regions()`'s implementation was already correct;
+  the test's formula was wrong and was corrected with the reasoning documented inline — the same
+  pattern as Phase 14's Tversky/Dice smoothing-convention lesson.
+
+**DOCUMENTATION UPDATED:**
+- `docs/EVALUATION.md` — new Phase 16 section.
+- `README.md` — Inference & Change Analysis section extended.
+- `DEVELOPMENT_LOG.md` — this entry.
+
+**KNOWN LIMITATIONS:**
+- Region export (`scripts/export_regions.py`) ran on 5 hand-picked test images (the same ones used
+  in earlier phases' qualitative grids, for continuity), not the full 128-image test set.
+- Severity scoring is explicitly not implemented — the dashboard table and docs both say so rather
+  than adding an empty column or a placeholder value.
+- `min_region_pixels=4`'s reasoning (ground-sampling-distance-based) is a documented engineering
+  judgment, not derived from a labeled sensitivity study of what region sizes are genuinely noise
+  vs. real small detections.
+
+**NEXT PHASE:**
+- PHASE 17 — Change Severity Analysis: not started without explicit user go-ahead, per this
+  project's phase-by-phase execution rule.
+
+---
+
 ## PHASE 15 — Confidence, Probability and Threshold Optimization
 
 **Date:** 2026-08-25

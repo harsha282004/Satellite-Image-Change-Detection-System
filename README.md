@@ -138,13 +138,18 @@ a qualitative prediction grid (before/after/ground-truth/prediction/overlay/diff
 
 ## Inference & Change Analysis
 
-**Implemented (Phase 9).** `src/inference/predict.py` (`Predictor` class) loads a config +
-checkpoint once and predicts a binary change mask from a before/after image pair.
-`src/analysis/{regions,area,statistics}.py` extract connected-component change regions from a
-predicted mask and compute region count, total/percent changed pixels, largest/average region
-size, and — only when a pixel size is explicitly provided, never assumed — physical area in
-m²/hectares (LEVIR-CD's documented 0.5 m/pixel, adjusted for the model's resized input resolution:
-see `src/analysis/area.py::levir_cd_effective_pixel_size`).
+**Implemented (Phase 9, extended Phase 16).** `src/inference/predict.py` (`Predictor` class) loads
+a config + checkpoint once and predicts a binary change mask (and, since Phase 15, a raw
+prediction-probability map) from a before/after image pair. `src/analysis/{regions,area,
+statistics}.py` extract connected-component **"Detected Change Regions"** (never labeled with a
+semantic category like "Building" — LEVIR-CD's binary labels give no basis for that, see
+`docs/DATASET.md`) with full geometry per region (bounding box, centroid, width/height, perimeter,
+aspect ratio, change density) plus mean/max prediction probability, and aggregate statistics
+(region count, largest/smallest/average region size, total/percent changed pixels) — physical area
+in m²/hectares only when a pixel size is explicitly provided, never assumed (LEVIR-CD's documented
+0.5 m/pixel, adjusted for the model's resized input resolution: see
+`src/analysis/area.py::levir_cd_effective_pixel_size`). `scripts/export_regions.py` saves real
+per-region CSV/JSON data and region-ID-labeled overlays to `outputs/regions/`.
 
 ```bash
 python scripts/analyze_predictions.py --config configs/siamese_attention_e100.yaml \
