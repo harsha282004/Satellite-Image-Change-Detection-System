@@ -171,33 +171,40 @@ about) correctly yielded only 3 tiny regions covering 0.05% of the tile.
 
 ## Dashboard
 
-**Implemented (Phase 10), unified into one final dashboard (Phase 23).**
+**"Satellite Change Intelligence"** — a dark, professional multi-page Streamlit application built
+around user tasks rather than development history.
 
 ```bash
 python -m streamlit run dashboard/app.py
 ```
 
-Five tabs integrate every phase's UI-facing work into one cohesive app:
-- **Project Overview** — a deterministic (disk-loaded, never live-recomputed) summary of the best
-  model's real test metrics and every phase's completion status.
-- **Live Detection** — upload a before/after pair, select any of the 8 trained models (7 CNN
-  variants + the Phase 20 Transformer research comparison), real Phase 22 input validation, real
-  inference (mask/probability/overlay), change statistics, region analysis with severity scoring,
-  and CSV/JSON exports.
-- **Model Comparison** — the real, measured 6-architecture comparison table (Phase 8 + Phase 20:
-  parameters, inference time, IoU/Dice/Precision/Recall/F1/Accuracy) and the Phase 13 training-
-  strategy comparison.
-- **Geospatial & Multi-Temporal** — the most recent real `scripts/geospatial_analysis.py` run
-  (interactive map, GeoJSON download) and `scripts/multitemporal_analysis.py` run (per-interval
-  table and chart, with the no-causal-claims warning repeated).
-- **Failure Cases & Limitations** — the real, documented Phase 8 false-positive failure case and a
-  pointer to the complete `docs/LIMITATIONS.md`.
+Structure (`dashboard/app.py` entry point, `dashboard/theme.py` design system,
+`dashboard/data.py` shared data layer, `dashboard/app_pages/*.py` one file per page):
 
-Verified via Streamlit's official in-process `AppTest` harness (`tests/test_dashboard_app.py`, 4
-tests: no top-level exceptions, all 5 tabs render, disclaimer present, model selectbox complete)
-and a live local server (HTTP 200). The "Capabilities" table at the bottom states plainly what is
-and isn't implemented (e.g. no change-type classification, no verified real-world-imagery support,
-no multi-class detection) — nothing is faked or implied.
+- **Overview** — real flagship benchmark metrics (IoU/Dice/F1/Accuracy), user-facing system
+  capabilities, and a quick-start guide.
+- **Change Detection** — upload a before/after pair (with live compatibility/validation checks),
+  select any of the 8 trained models from the sidebar, run real inference with a staged processing
+  view, then explore results: side-by-side/overlay/probability views, a detection summary, a
+  sortable/filterable region table (geometry, prediction probability, severity), and CSV/JSON
+  exports.
+- **Model Analysis** — the real, measured architecture comparison table and charts (parameters,
+  inference time, IoU/Dice/Precision/Recall/F1/Accuracy) and the training-strategy comparison.
+- **Geospatial Intelligence** — the most recent real geospatial analysis run: an interactive map
+  and GeoJSON export, built from actual georeferenced Sentinel-2 imagery.
+- **Temporal Analysis** — the most recent real multi-date analysis run, interval by interval, with
+  a clearly stated no-tracking/no-causal-claims disclaimer.
+- **Diagnostics** — the full technical detail (input validation methodology, model internals,
+  threshold/probability explanation, documented failure cases, complete limitations) kept out of
+  the main workflow but always one click away.
+
+Internal development history (phases, implementation-status tables) is not shown in the app —
+that record lives in `DEVELOPMENT_LOG.md` and `docs/`, as it always has.
+
+Verified via Streamlit's official in-process `AppTest` harness across the entry point and all 5
+sub-pages (`tests/test_dashboard_app.py`), a dedicated end-to-end pipeline test against real
+imagery and the real best-model checkpoint (`tests/test_change_detection_pipeline.py`), unit tests
+for the shared data layer (`tests/test_dashboard_data.py`), and a live local server (HTTP 200).
 
 ## Results
 

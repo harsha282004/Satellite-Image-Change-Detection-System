@@ -11,6 +11,100 @@ only the "wait for the user between phases" behavior changed.
 
 ---
 
+## FRONTEND REDESIGN — "Satellite Change Intelligence" dark professional UI
+
+**Date:** 2026-08-30
+
+**STATUS:** COMPLETED
+
+**REQUEST:** A major professional frontend redesign, requested directly by the user (not a
+numbered phase from the original mega-spec): transform the dashboard from an academic/developer-
+oriented UI into a dark, professional AI/geospatial-product UI, organized around user tasks
+instead of development phases, with no development history (phase numbers, implementation-status
+tables) exposed to end users.
+
+**IMPLEMENTED:**
+- Restructured the single-file `dashboard/app.py` into a proper Streamlit multi-page app using
+  `st.navigation`/`st.Page` (file-based pages under `dashboard/app_pages/`, named `app_pages/` per
+  Streamlit's own guidance to avoid colliding with the legacy `pages/` auto-discovery mechanism):
+  Overview, Change Detection, Model Analysis, Geospatial Intelligence, Temporal Analysis,
+  Diagnostics.
+- `.streamlit/config.toml`: a dark theme (near-black background, cyan/blue primary, violet
+  secondary, green/amber/red status colors, Inter + JetBrains Mono fonts) via Streamlit's native
+  theming system — adapted from Streamlit's own bundled "financial-dashboard" template.
+- `dashboard/theme.py`: a small design-system module — Material Symbol icon constants, a handful
+  of reusable components (hero banner, KPI row, section header, compact info banner, status badge,
+  empty state, capability card), and a minimal amount of key-scoped custom CSS (gradients, card
+  hover effects, kicker labels) for the specific visual touches native theming doesn't cover.
+- `dashboard/data.py`: the shared data-loading layer, extracted unchanged in behavior from the
+  pre-redesign `app.py` (model registry, checkpoint/metrics loading, image decoding, threshold
+  selection) — display strings reworded to remove phase/development references; **no config path,
+  checkpoint path, or experiment name was changed.** Found and fixed one real pre-existing bug
+  while extracting this logic: `load_selected_threshold` matched experiment names by substring
+  containment against the swept checkpoint's path, which incorrectly matched shorter experiment
+  names that happen to be string-prefixes of the actual swept checkpoint (e.g. `siamese_unet_diff`
+  against `siamese_unet_diff_concat_attention_e100`) — 3 of 8 models were silently getting the
+  wrong model's optimized threshold. Fixed to an exact match against the checkpoint's own
+  experiment directory name; regression test added (`tests/test_dashboard_data.py`).
+- Every user-facing page (Overview, Change Detection, Model Analysis, Geospatial, Temporal) is
+  free of phase numbers and "implemented/not implemented" status tables — verified by an automated
+  test, not just manual inspection. Technical detail, model internals, full disclaimers, and
+  documented limitations moved to a dedicated Diagnostics page.
+- Change Detection gained real UX improvements built on the exact same backend calls as before:
+  upload cards with live dimension/filename/size preview, automatic input-validation status badges,
+  a friendly "Image compatibility error" card (instead of a raw exception) when dimensions
+  mismatch, a real staged `st.status` processing view during inference (each stage tied to an
+  actual pipeline step completing, no fabricated percentages), a side-by-side/overlay/probability
+  view toggle with an adjustable overlay-opacity slider, a stale-result guard (re-uploading a new
+  pair clears the previous result until "Run" is clicked again), and a severity-category filter on
+  the region table.
+- Model Analysis gained real bar-chart visualizations (IoU, Dice, inference time, parameter count)
+  built from the same `outputs/metrics/architecture_comparison.json` used before.
+
+**FILES CREATED:**
+- `.streamlit/config.toml`, `dashboard/theme.py`, `dashboard/data.py`,
+  `dashboard/app_pages/{overview,change_detection,model_analysis,geospatial,temporal,diagnostics}.py`,
+  `tests/test_dashboard_data.py`, `tests/test_change_detection_pipeline.py`
+
+**FILES MODIFIED:**
+- `dashboard/app.py` (rewritten as the multipage entry point/router — see above),
+  `tests/test_dashboard_app.py` (rewritten for the multipage structure, plus a new automated check
+  that no phase-number references leak into user-facing pages), `README.md`
+
+**FILES REMOVED:** None — no ML, training, evaluation, or checkpoint code was touched.
+
+**TESTS:**
+- `pytest tests/test_dashboard_app.py tests/test_dashboard_data.py
+  tests/test_change_detection_pipeline.py -q`: 12/12 passed (entry point + all 5 sub-pages render
+  with zero exceptions via `AppTest`, sidebar model registry intact at 8 entries, no phase-number
+  text on any user-facing page, real flagship metrics present, threshold-matching bug fixed and
+  regression-tested, full real-image-and-real-model pipeline smoke test passing).
+- `pytest tests/ -q`: 193/193 passed — confirms zero regressions anywhere in the ML/training/
+  evaluation codebase (this was a frontend-only change).
+- Manual verification: all 8 registered models load successfully (`build_model` + checkpoint) with
+  their real, unchanged benchmark IoU values; Model Analysis, Geospatial, and Temporal pages
+  confirmed to render their real-data "happy path" (not just their empty-state fallback) with the
+  exact real numbers already on record (6 geospatial regions/30.89 ha, 4 temporal intervals
+  matching the original recorded values); a live local server confirmed responding HTTP 200 after
+  every change.
+
+**DOCUMENTATION UPDATED:**
+- `README.md` — "Dashboard" section rewritten to describe the new page structure and branding.
+- `DEVELOPMENT_LOG.md` — this entry.
+
+**KNOWN LIMITATIONS:**
+- `streamlit.testing.v1.AppTest` cannot simulate `st.file_uploader` input, so the Change Detection
+  page's upload-dependent UI (as opposed to its underlying pipeline, which is tested directly) was
+  not exercised through an actual browser session — no working Playwright/browser install was
+  available in this session to add that layer of verification.
+- The image viewer's "zoom" relies on Streamlit's own built-in click-to-enlarge on `st.image`
+  rather than a custom pixel-level zoom/pan control, which Streamlit does not natively support.
+- Geospatial and Temporal pages display the most recently generated real analysis run from disk —
+  they do not trigger a live re-analysis from within the dashboard (both require live network
+  access to fetch satellite imagery), unchanged from before the redesign.
+
+---
+
 ## PHASE 23 — Final Unified Dashboard
 
 **Date:** 2026-08-25

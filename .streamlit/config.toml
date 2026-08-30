@@ -1,0 +1,69 @@
+# Satellite Change Intelligence — dark professional theme.
+# Base palette adapted from Streamlit's own "financial-dashboard" template, tuned to this
+# project's requested accent system (cyan/blue primary, violet secondary, green/amber/red status).
+
+[theme]
+base = "dark"
+primaryColor = "#22D3EE"
+backgroundColor = "#0A0E14"
+secondaryBackgroundColor = "#131826"
+codeBackgroundColor = "#131826"
+textColor = "#E5E9F0"
+linkColor = "#22D3EE"
+borderColor = "#232B3A"
+codeTextColor = "#CBD5E1"
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "10px"
+buttonRadius = "8px"
+
+font = "'Inter':https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "'Inter':https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+baseFontSize = 14
+baseFontWeight = 400
+codeFontSize = "13px"
+headingFontSizes = ["26px", "20px", "17px", "15px", "14px", "12px"]
+headingFontWeights = [700, 600, 600, 600, 500, 500]
+linkUnderline = false
+
+greenColor = "#34D399"
+redColor = "#F87171"
+yellowColor = "#FBBF24"
+orangeColor = "#FB923C"
+blueColor = "#22D3EE"
+violetColor = "#A78BFA"
+grayColor = "#8B95A7"
+
+chartCategoricalColors = [
+    "#22D3EE",
+    "#A78BFA",
+    "#34D399",
+    "#FBBF24",
+    "#F87171",
+    "#60A5FA",
+    "#8B95A7",
+]
+chartSequentialColors = [
+    "#08202A",
+    "#0B2E3C",
+    "#0E3D4F",
+    "#115065",
+    "#15647E",
+    "#1B84A3",
+    "#22A6C9",
+    "#5FCBE0",
+    "#9EE0EE",
+    "#DBF5FA",
+]
+
+dataframeBorderColor = "#232B3A"
+dataframeHeaderBackgroundColor = "#131826"
+
+[theme.sidebar]
+backgroundColor = "#060810"
+secondaryBackgroundColor = "#111726"
+codeBackgroundColor = "#111726"
+textColor = "#E5E9F0"
+borderColor = "#1B2231"
+primaryColor = "#22D3EE"
