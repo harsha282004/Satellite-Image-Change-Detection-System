@@ -1,0 +1,9 @@
+# Ensure binary files are never subject to line-ending normalization (CRLF/LF conversion),
+# regardless of core.autocrlf — a PDF (or other binary) silently "converted" this way is corrupted.
+*.pdf -text -diff
+*.png -text -diff
+*.jpg -text -diff
+*.jpeg -text -diff
+*.pt -text -diff
+*.pth -text -diff
+*.zip -text -diff
