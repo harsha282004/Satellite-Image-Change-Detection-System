@@ -47,3 +47,6 @@ pytest==9.1.1
 
 # Dataset acquisition (used to download the LEVIR-CD mirror, see docs/DATASET.md)
 huggingface_hub==1.28.0
+
+# Documentation (used by scripts/generate_documentation.py to build PROJECT_DOCUMENTATION.pdf)
+reportlab==5.0.1
